@@ -3,7 +3,7 @@ import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Search, MapPin, Calendar, Clock, Users, ArrowRight, ShieldCheck, 
-  Star, Info, X, Navigation, Filter, User, IdCard, FileText, 
+  Star, Info, X, Navigation as NavIcon, Filter, User, IdCard, FileText, 
   ChevronRight, Car, Loader2, LayoutDashboard, LogOut, TrendingUp,
   Map, Sparkles
 } from 'lucide-react';
@@ -97,41 +97,43 @@ const RideResults = () => {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col font-outfit">
-      {/* Search Result Mini-Navbar */}
-      <nav className="sticky top-0 left-0 right-0 z-[100] bg-white border-b border-slate-200/60 shadow-sm px-6 md:px-12 py-4">
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <Link to="/dashboard" className="flex items-center gap-3">
-            <div className="bg-indigo-600 p-2 rounded-xl shadow-lg shadow-indigo-200">
+      <nav className="sticky top-0 left-0 right-0 z-[100] px-6 md:px-12 py-4 bg-white/70 backdrop-blur-2xl border-b border-slate-200/50 shadow-sm flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Link to="/dashboard" className="flex items-center gap-4 group">
+            <div className="bg-indigo-600 p-2 rounded-xl shadow-lg shadow-indigo-200 transform group-hover:rotate-12 transition-transform duration-300">
               <LayoutDashboard className="text-white h-5 w-5" />
             </div>
             <span className="font-bold text-2xl tracking-tighter text-slate-800">Raid<span className="text-indigo-600">Dosthi</span></span>
           </Link>
+        </div>
 
-          <div className="hidden lg:flex items-center gap-6 bg-slate-50 px-6 py-2.5 rounded-2xl border border-slate-100 italic">
-             <div className="flex items-center gap-2">
-                <MapPin size={16} className="text-indigo-600" />
-                <span className="text-sm font-black text-slate-700">{from}</span>
-             </div>
-             <ChevronRight size={14} className="text-slate-300" />
-             <div className="flex items-center gap-2">
-                <Navigation size={16} className="text-purple-600" />
-                <span className="text-sm font-black text-slate-700">{to}</span>
-             </div>
-             <div className="w-[1px] h-4 bg-slate-200 ml-2"></div>
-             <div className="flex items-center gap-2">
-                <Calendar size={16} className="text-indigo-600" />
-                <span className="text-sm font-black text-slate-700">{date}</span>
-             </div>
-          </div>
+        <div className="hidden lg:flex items-center gap-6 bg-slate-50/50 px-6 py-2 rounded-2xl border border-slate-100 italic">
+           <div className="flex items-center gap-2">
+              <MapPin size={14} className="text-indigo-600" />
+              <span className="text-xs font-black text-slate-600 truncate max-w-[120px]">{from || 'Anywhere'}</span>
+           </div>
+           <ChevronRight size={12} className="text-slate-300" />
+           <div className="flex items-center gap-2">
+              <NavIcon size={14} className="text-purple-600" />
+              <span className="text-xs font-black text-slate-600 truncate max-w-[120px]">{to || 'Global'}</span>
+           </div>
+           <div className="w-[1px] h-4 bg-slate-200 mx-2"></div>
+           <div className="flex items-center gap-2">
+              <Calendar size={14} className="text-indigo-600" />
+              <span className="text-xs font-black text-slate-600">{date || 'Any Date'}</span>
+           </div>
+        </div>
 
-          <div className="flex items-center gap-4">
-            <Link to="/find-rides" className="bg-slate-100 hover:bg-slate-200 p-2.5 rounded-xl text-slate-500 transition-all font-bold text-xs uppercase tracking-widest flex items-center gap-2">
-               <Search size={16} /> New Search
-            </Link>
-            <button onClick={logout} className="p-2.5 rounded-xl bg-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-500 transition-all active:scale-95">
-              <LogOut size={20} />
-            </button>
+        <div className="flex items-center gap-6">
+          <div className="hidden lg:flex items-center gap-8">
+             <Link to="/find-rides" className="text-sm font-bold text-slate-500 hover:text-indigo-600 transition-colors">Find Rides</Link>
+             <Link to="/offer-ride" className="text-sm font-bold text-slate-500 hover:text-indigo-600 transition-colors">Offer Ride</Link>
+             <Link to="/profile" className="text-sm font-bold text-slate-500 hover:text-indigo-600 transition-colors">Profile</Link>
           </div>
+          <div className="h-8 w-[1px] bg-slate-200 hidden lg:block"></div>
+          <button onClick={logout} className="p-2.5 rounded-xl bg-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-500 transition-all flex items-center justify-center">
+             <LogOut size={20} />
+          </button>
         </div>
       </nav>
 
@@ -139,7 +141,9 @@ const RideResults = () => {
          <div className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div>
                <h2 className="text-3xl font-black text-slate-900 tracking-tight leading-none mb-2">Verified Trip <span className="text-indigo-600 italic">Connections.</span></h2>
-               <p className="text-slate-600 font-bold uppercase text-[10px] tracking-[0.3em]">Showing {rides.length} available rides for your route</p>
+               <p className="text-slate-600 font-bold uppercase text-[10px] tracking-[0.3em]">
+                  {(!from && !to && !date) ? `Showing ${rides.length} global available rides` : `Showing ${rides.length} available rides for your route`}
+               </p>
             </div>
             <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 h-fit">
                <button className="h-10 px-6 rounded-xl bg-white text-indigo-600 font-black text-xs shadow-sm uppercase tracking-widest flex items-center gap-2">

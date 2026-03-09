@@ -165,10 +165,11 @@ exports.getAllRides = async (req, res) => {
       expiresAt: { $gt: new Date() }
     };
 
+    let startOfDay, endOfDay;
     if (date && date !== 'null' && date !== 'undefined' && date.trim() !== '') {
         const searchDate = new Date(date);
-        const startOfDay = new Date(searchDate.setHours(0,0,0,0));
-        const endOfDay = new Date(searchDate.setHours(23,59,59,999));
+        startOfDay = new Date(searchDate.setHours(0,0,0,0));
+        endOfDay = new Date(searchDate.setHours(23,59,59,999));
         query.date = { $gte: startOfDay, $lte: endOfDay };
     }
 
@@ -184,7 +185,9 @@ exports.getAllRides = async (req, res) => {
 
       // SEARCH STRATEGY (Direct Boarding): 
       // 1. Driver must START near the passenger's pickup (fromCoordinates)
-      console.log(`[SmartRadar] Searching for rides in range: ${startOfDay.toISOString()} to ${endOfDay.toISOString()}`);
+      if (startOfDay) {
+        console.log(`[SmartRadar] Searching for rides in range: ${startOfDay.toISOString()} to ${endOfDay.toISOString()}`);
+      }
       console.log(`[SmartRadar] Passenger Pickup: [${passengerLng}, ${passengerLat}]`);
 
       const candidateRides = await Ride.find({
@@ -248,7 +251,7 @@ exports.getAllRides = async (req, res) => {
             distanceToRider: `${distanceToRider} km away`
           };
 
-          return { ...ride.toObject(), bookingDetails };
+          return { ...ride.toObject(), bookingDetails, dynamicFare: fareForPassenger };
         });
 
       return res.status(200).json({ success: true, count: matchingRides.length, data: matchingRides });
@@ -268,7 +271,8 @@ exports.getAllRides = async (req, res) => {
         totalBooked: ride.bookings.filter(b => b.status === 'confirmed').length,
         fareForPassenger: ride.price,
         distanceToRider: "Location unknown"
-      }
+      },
+      dynamicFare: ride.price
     }));
 
     res.status(200).json({ success: true, count: formattedRides.length, data: formattedRides });

@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import LocationSelector from '../components/LocationSelector';
 import { toast } from 'react-toastify';
 import { Navigation as NavIcon } from 'lucide-react';
+import Navbar from '../components/Navbar';
 
 const FindRides = () => {
   const { user, logout } = useAuth();
@@ -60,35 +61,7 @@ const FindRides = () => {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col font-outfit">
-      {/* Premium Navbar */}
-      <nav className={`fixed top-0 left-0 right-0 z-[100] transition-all duration-500 px-6 md:px-12 py-3 md:py-4 ${scrolled ? 'bg-white/80 backdrop-blur-xl border-b border-slate-200/60 shadow-sm' : 'bg-transparent'}`}>
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <Link to="/dashboard" className="flex items-center gap-3 group shrink-0">
-            <div className="bg-indigo-600 p-2 rounded-xl shadow-lg shadow-indigo-200 transform group-hover:rotate-12 transition-transform duration-300">
-              <LayoutDashboard className="text-white h-5 w-5" />
-            </div>
-            <span className={`font-bold text-2xl tracking-tighter ${scrolled ? 'text-slate-800' : 'text-slate-800'}`}>Raid<span className="text-indigo-600">Dosthi</span></span>
-          </Link>
-
-          <div className="hidden lg:flex items-center gap-10">
-            <Link to="/find-rides" className="text-sm font-bold text-indigo-600 relative after:absolute after:bottom-[-4px] after:left-0 after:right-0 after:h-0.5 after:bg-indigo-600">Find Rides</Link>
-            <Link to="/offer-ride" className="text-sm font-bold text-slate-500 hover:text-indigo-600 transition-colors">Offer Ride</Link>
-            <Link to="/bookings" className="text-sm font-bold text-slate-500 hover:text-indigo-600 transition-colors">My Bookings</Link>
-          </div>
-
-          <div className="flex items-center gap-4">
-             <div className="hidden sm:flex items-center gap-3 bg-white py-1.5 md:py-2 px-3 md:px-4 rounded-2xl shadow-sm border border-slate-100 shrink-0">
-               <div className="h-7 w-7 md:h-8 md:w-8 rounded-lg md:rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold ring-2 ring-indigo-50 shrink-0">
-                 {user?.name?.charAt(0)}
-               </div>
-               <span className="text-sm font-bold text-slate-800 leading-none">{user?.name}</span>
-             </div>
-             <button onClick={logout} className="p-2 md:p-2.5 rounded-xl bg-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-500 transition-all active:scale-95 flex items-center justify-center h-10 w-10 md:h-12 md:w-12">
-               <LogOut size={20} />
-             </button>
-          </div>
-        </div>
-      </nav>
+      <Navbar />
 
       <section className="relative pt-32 md:pt-36 pb-20 md:pb-32 flex flex-col items-center justify-center px-6 overflow-hidden">
         {/* Background Patterns */}
