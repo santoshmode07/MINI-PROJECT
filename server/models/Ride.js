@@ -1,0 +1,144 @@
+const mongoose = require('mongoose');
+
+const rideSchema = new mongoose.Schema({
+  driver: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+  from: {
+    type: String,
+    required: [true, 'Pickup location is required'],
+    trim: true
+  },
+  to: {
+    type: String,
+    required: [true, 'Destination is required'],
+    trim: true
+  },
+  fromCoordinates: {
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point'
+    },
+    coordinates: {
+      type: [Number], // [longitude, latitude]
+      default: [0, 0]
+    }
+  },
+  toCoordinates: {
+    type: {
+      type: String,
+      enum: ['Point'],
+      default: 'Point'
+    },
+    coordinates: {
+      type: [Number], // [longitude, latitude]
+      default: [0, 0]
+    }
+  },
+  routePoints: {
+    type: {
+      type: String,
+      enum: ['LineString'],
+      default: 'LineString'
+    },
+    coordinates: {
+      type: [[Number]], // array of [lng, lat] pairs
+      default: []
+    }
+  },
+  date: {
+    type: Date,
+    required: [true, 'Date is required']
+  },
+  time: {
+    type: String,
+    required: [true, 'Time is required']
+  },
+  seatsAvailable: {
+    type: Number,
+    required: [true, 'Number of available seats is required'],
+    min: [1, 'At least 1 seat must be available']
+  },
+  carModel: {
+    type: String,
+    required: [true, 'Car model is required']
+  },
+  carNumber: {
+    type: String,
+    required: [true, 'Car plate number is required'],
+    uppercase: true
+  },
+  price: {
+    type: Number,
+    required: [true, 'Price per seat is required'],
+    min: [0, 'Price cannot be negative']
+  },
+  genderPreference: {
+    type: String,
+    enum: ['any', 'male-only', 'female-only'],
+    default: 'any'
+  },
+  driverGender: {
+    type: String,
+    enum: ['male', 'female']
+  },
+  expiresAt: {
+    type: Date
+  },
+  waitingTime: {
+    type: Number,
+    default: 10  // minutes after departure time
+  },
+  status: {
+    type: String,
+    enum: ['available', 'full', 'completed', 'cancelled'],
+    default: 'available'
+  },
+  bookings: [{
+    passenger: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    status: {
+      type: String,
+      enum: ['confirmed', 'cancelled'],
+      default: 'confirmed'
+    },
+    boardingPoint: {
+      address:     { type: String, default: '' },
+      coordinates: { type: [Number], default: [] }
+    },
+    dropoffPoint: {
+      address:     { type: String, default: '' },
+      coordinates: { type: [Number], default: [] }
+    },
+    fareCharged: {
+      type: Number,
+      default: 0
+    },
+    paymentMethod: {
+      type: String,
+      enum: ['cash', 'online'],
+      default: 'cash'
+    },
+    bookedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }]
+}, {
+  timestamps: true
+});
+
+// Indexes for fast GPS-based location search
+rideSchema.index({ routePoints:      '2dsphere' });
+rideSchema.index({ fromCoordinates:  '2dsphere' });
+rideSchema.index({ toCoordinates:    '2dsphere' });
+rideSchema.index({ from: 'text', to: 'text' });
+
+const Ride = mongoose.model('Ride', rideSchema);
+
+module.exports = Ride;
