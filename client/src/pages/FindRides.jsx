@@ -28,6 +28,16 @@ const FindRides = () => {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
+    // RESTORE SEARCH PARAMS FROM LOCALSTORAGE
+    const savedParams = localStorage.getItem('lastSearchParams');
+    if (savedParams) {
+      try {
+        setSearchParams(JSON.parse(savedParams));
+      } catch (e) {
+        console.error("Failed to parse saved search params", e);
+      }
+    }
+
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
@@ -38,6 +48,9 @@ const FindRides = () => {
   const handleSearch = async (e) => {
     if (e) e.preventDefault();
     setIsSearching(true);
+
+    // PERSIST SEARCH PARAMS
+    localStorage.setItem('lastSearchParams', JSON.stringify(searchParams));
 
     // Simplified to use state coordinates directly, as LocationSelector handles geocoding
     const query = new URLSearchParams({

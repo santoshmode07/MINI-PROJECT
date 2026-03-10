@@ -93,7 +93,7 @@ const OfferRide = () => {
     try {
       // REQUIREMENT 5: If all else fails, just send the text
       const rideData = { ...formData };
-      const response = await api.post('/rides', rideData);
+      const response = await api.post('/rides/offer', rideData);
       toast.success('Ride offer created successfully!');
       navigate('/dashboard');
     } catch (error) {
