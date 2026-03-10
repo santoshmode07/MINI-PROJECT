@@ -11,6 +11,64 @@ import { toast } from 'react-toastify';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 
+const RideCountdown = ({ date, time }) => {
+  const [timeLeft, setTimeLeft] = useState('');
+
+  useEffect(() => {
+    const calculateTimeLeft = () => {
+      try {
+        if (!date || !time) return;
+        
+        // Ensure date is YYYY-MM-DD
+        const datePart = (typeof date === 'string' && date.includes('T')) ? date.split('T')[0] : date;
+        // Fix for time if it's not HH:mm:ss
+        const timePart = time.length === 5 ? `${time}:00` : time;
+        
+        const startAt = new Date(`${datePart}T${timePart}`);
+        const difference = startAt - new Date();
+        
+        if (isNaN(startAt.getTime())) {
+          setTimeLeft('SCHEDULED');
+          return;
+        }
+
+        if (difference <= 0) {
+          setTimeLeft('DEPARTED');
+          return;
+        }
+
+        const hours = Math.floor((difference / (1000 * 60 * 60)));
+        const mins = Math.floor((difference / 1000 / 60) % 60);
+        const secs = Math.floor((difference / 1000) % 60);
+
+        if (hours > 24) {
+          setTimeLeft(`${Math.floor(hours / 24)}d ${hours % 24}h`);
+        } else if (hours > 0) {
+          setTimeLeft(`${hours}h ${mins}m`);
+        } else {
+          setTimeLeft(`${mins}m ${secs}s`);
+        }
+      } catch (err) {
+        setTimeLeft('READY');
+      }
+    };
+
+    calculateTimeLeft();
+    const timer = setInterval(calculateTimeLeft, 1000);
+    return () => clearInterval(timer);
+  }, [date, time]);
+
+  if (!timeLeft) return null;
+
+  return (
+    <div className="flex items-center gap-2 bg-rose-50 px-3 py-1.5 rounded-xl border border-rose-100 shadow-sm animate-in fade-in zoom-in duration-500">
+      <div className="h-2 w-2 rounded-full bg-rose-500 animate-ping"></div>
+      <Clock size={12} className="text-rose-600" />
+      <span className="text-[11px] font-black text-rose-700 uppercase tracking-tight">{timeLeft}</span>
+    </div>
+  );
+};
+
 const RideResults = () => {
   const { user, logout } = useAuth();
   const [searchParams] = useSearchParams();
@@ -196,16 +254,17 @@ const RideResults = () => {
                       <div className="h-16 w-16 rounded-[1.8rem] bg-[#F8FAFC] shadow-inner flex items-center justify-center text-slate-200 font-bold overflow-hidden border border-slate-100 shrink-0">
                          {ride.driver?.avatar ? <img src={ride.driver.avatar} className="object-cover w-full h-full" /> : <User size={32} />}
                       </div>
-                      <div className="flex-1">
-                         <h3 className="font-black text-slate-800 group-hover:text-indigo-600 transition-colors line-clamp-1">{ride.driver?.name}</h3>
-                         <div className="flex items-center gap-2 mt-1">
-                            <div className="flex bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-100">
-                               <Star size={12} className="text-amber-500 fill-amber-500 mt-[1px] mr-1.5" />
-                               <span className="text-[10px] font-black text-amber-700 italic tracking-tighter">{ride.driver?.averageRating || 'NEW'}</span>
-                            </div>
-                             <span className="text-[9px] font-black text-slate-500 uppercase underline decoration-slate-300 tracking-[0.1em]">{ride.driver?.totalRatings || 0} REVIEWS</span>
-                         </div>
-                      </div>
+                       <div className="flex-1">
+                          <h3 className="font-black text-slate-800 group-hover:text-indigo-600 transition-colors line-clamp-1 italic tracking-tight">{ride.driver?.name}</h3>
+                          <div className="flex items-center gap-3 mt-1.5">
+                             <div className="flex bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-100 shadow-sm">
+                                <Star size={12} className="text-amber-500 fill-amber-500 mt-[1px] mr-1.5" />
+                                <span className="text-[10px] font-black text-amber-700 italic tracking-tighter">{ride.driver?.averageRating || 'NEW'}</span>
+                             </div>
+                             <div className="h-4 w-[1px] bg-slate-200"></div>
+                             <RideCountdown date={ride.date} time={ride.time} />
+                          </div>
+                       </div>
                    </div>
 
                    <div className="space-y-6 mb-10">
@@ -216,25 +275,31 @@ const RideResults = () => {
                          
                          <div className="flex-1 space-y-6">
                             <div>
-                               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Origin</p>
+                               <p className="text-[9px] font-black text-rose-500 uppercase tracking-widest mb-0.5 italic">Raider Start (Meet here)</p>
                                <p className="font-black text-slate-800 text-sm leading-tight italic">{ride.from}</p>
                             </div>
                             <div>
-                               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Destiny</p>
-                               <p className="font-black text-slate-800 text-sm leading-tight italic">{ride.to}</p>
+                               <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest mb-0.5 italic">Midway Drop-off</p>
+                               <p className="font-black text-slate-800 text-sm leading-tight italic">{to || ride.to}</p>
                             </div>
+                       <p className="pl-6 text-[10px] font-black text-rose-600 uppercase tracking-tighter mt-4">* Arrive at start point before countdown ends</p>
                          </div>
                       </div>
                    </div>
 
                     <div className="pt-6 border-t border-slate-50 flex items-center justify-between">
                        <div className="flex flex-col gap-1">
-                          <div className="bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100 flex items-center gap-2">
-                            <MapPin size={10} className="text-indigo-400" />
-                            <p className="text-[10px] font-black text-slate-500 italic tracking-tight">{ride.bookingDetails?.distanceToRider || 'Location N/A'}</p>
-                          </div>
-                          <div className="flex items-center gap-3 mt-1 px-1">
-                            <p className="text-[10px] font-black text-slate-400 italic">{ride.seatsAvailable} seats left</p>
+                           <div className="bg-indigo-600/5 backdrop-blur-3xl px-4 py-2 rounded-2xl border border-indigo-100/50 flex items-center gap-2.5 group/dist hover:bg-indigo-600 hover:border-indigo-600 transition-all duration-300">
+                             <div className="h-6 w-6 bg-white rounded-lg flex items-center justify-center shadow-sm group-hover/dist:scale-110 transition-transform">
+                                <MapPin size={12} className="text-indigo-600" />
+                             </div>
+                             <p className="text-[11px] font-black text-indigo-900 italic tracking-tight group-hover/dist:text-white transition-colors">
+                                {ride.bookingDetails?.distanceToRider || 'Location N/A'}
+                             </p>
+                           </div>
+                          <div className="flex items-center gap-2 px-1">
+                             <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                             <p className="text-[10px] font-black text-slate-400 italic tracking-tight">{ride.seatsAvailable} spaces open</p>
                           </div>
                        </div>
                        <div className="text-right">
@@ -328,13 +393,13 @@ const RideResults = () => {
                             <div className="space-y-10 relative pl-8 border-l-2 border-slate-50 ml-2">
                                <div className="relative">
                                   <div className="absolute -left-[41px] top-1/2 -translate-y-1/2 h-5 w-5 rounded-full bg-white border-4 border-indigo-600 z-10 shadow-sm"></div>
-                                  <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[.2em] mb-1 italic">Pickup Location</p>
+                                  <p className="text-[10px] font-black text-indigo-500 uppercase tracking-[.2em] mb-1 italic">Raider Starting Point (Meeting Point)</p>
                                   <p className="text-xl font-extrabold text-slate-800 tracking-tight italic underline decoration-indigo-200 underline-offset-4">{selectedRide.from}</p>
                                </div>
                                <div className="relative">
                                   <div className="absolute -left-[41px] top-1/2 -translate-y-1/2 h-5 w-5 rounded-full bg-white border-4 border-purple-600 z-10 shadow-sm"></div>
-                                  <p className="text-[10px] font-black text-purple-500 uppercase tracking-[.2em] mb-1 italic">Destination</p>
-                                  <p className="text-xl font-extrabold text-slate-800 tracking-tight italic underline decoration-purple-200 underline-offset-4">{selectedRide.to}</p>
+                                  <p className="text-[10px] font-black text-purple-500 uppercase tracking-[.2em] mb-1 italic">Your Midway Destination</p>
+                                  <p className="text-xl font-extrabold text-slate-800 tracking-tight italic underline decoration-purple-200 underline-offset-4">{to || selectedRide.to}</p>
                                </div>
                             </div>
                          </div>

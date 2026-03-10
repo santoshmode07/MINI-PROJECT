@@ -156,6 +156,7 @@ const LocationSelector = ({ label, placeholder, name, value, coordinates, onChan
       click(e) {
         const { lat, lng } = e.latlng;
         setPinPos([lat, lng]);
+        setMapCenter([lat, lng]); // Sync center with pin to avoid jump-backs
         handleReverseGeocode(lat, lng);
       },
     });

@@ -8,34 +8,45 @@ const getRoutePoints = async (fromCoords, toCoords) => {
     if (!fromCoords || fromCoords.length < 2 || !toCoords || toCoords.length < 2) {
       return [];
     }
+    // alternatives=true finds all main highway options (e.g. AH45 vs NH48)
     const url =
       `http://router.project-osrm.org/route/v1/driving/` +
       `${fromCoords[0]},${fromCoords[1]};` +
       `${toCoords[0]},${toCoords[1]}` +
-      `?overview=full&geometries=geojson`;
+      `?overview=full&geometries=geojson&alternatives=true`;
 
     const response = await fetch(url);
     const data     = await response.json();
 
-    if (!data.routes || data.routes.length === 0) return [fromCoords, toCoords];
-    const allPoints = data.routes[0].geometry.coordinates;
-
-    // Save up to 50 points for high-precision path matching
-    let keyPoints = [];
-    if (allPoints.length <= 50) {
-      keyPoints = allPoints;
-    } else {
-      const step = Math.floor(allPoints.length / 50);
-      keyPoints = allPoints.filter((_, i) => i % step === 0);
+    if (!data.routes || data.routes.length === 0) {
+      console.log(`[OSRM] No routes found for ${fromCoords} to ${toCoords}`);
+      return [fromCoords, toCoords];
     }
     
-    // Explicitly add start and end to ensure 100% match at polar points
-    if (!keyPoints.find(p => p[0] === fromCoords[0] && p[1] === fromCoords[1])) keyPoints.unshift(fromCoords);
-    if (!keyPoints.find(p => p[0] === toCoords[0] && p[1] === toCoords[1])) keyPoints.push(toCoords);
+    const allRoutesKeyPoints = [];
 
-    return keyPoints;
+    // Extract sampled points from ALL returned routes
+    data.routes.forEach((route, index) => {
+      const allPoints = route.geometry.coordinates;
+      let sampled = [];
+      // Increase sampling to 100 points per route for better 20km sphere matching
+      if (allPoints.length <= 100) {
+        sampled = allPoints;
+      } else {
+        const step = Math.floor(allPoints.length / 100);
+        sampled = allPoints.filter((_, i) => i % step === 0);
+      }
+      allRoutesKeyPoints.push(...sampled);
+      console.log(`[OSRM] Route ${index + 1}: Sampled ${sampled.length} points.`);
+    });
+
+    // Add explicit start/end to be safe
+    allRoutesKeyPoints.unshift(fromCoords);
+    allRoutesKeyPoints.push(toCoords);
+
+    return allRoutesKeyPoints;
   } catch (error) {
-    console.error("OSRM Error:", error.message);
+    console.error(`[OSRM] API Critical Error: ${error.message} (Is the network or OSRM service down?)`);
     return [fromCoords, toCoords];
   }
 };
@@ -139,7 +150,19 @@ const calculatePartialFare = (
   const rideTotalDistance = haversineDistance(rideFromCoords, rideToCoords);
   if (rideTotalDistance <= 1) return fullPrice; // Short ride or invalid coords
 
-  const passengerTraveledDistance = haversineDistance(passengerPickupCoords, passengerDropoffCoords);
+  // If passenger pickup point is more than 18km away from rider's starting point, 
+  // assume they meet at the rider's starting point and calculate fare accordingly.
+  const distanceToOrigin = haversineDistance(passengerPickupCoords, rideFromCoords);
+  
+  let passengerTraveledDistance;
+  if (distanceToOrigin > 18) {
+    // Logic: Passenger travels to rider's starting point
+    // Fare is calculated from the rider's origin to the passenger's dropoff point
+    passengerTraveledDistance = haversineDistance(rideFromCoords, passengerDropoffCoords);
+  } else {
+    // Normal calculation: Based on where the passenger actually gets picked up
+    passengerTraveledDistance = haversineDistance(passengerPickupCoords, passengerDropoffCoords);
+  }
   
   // Calculate ratio: what % of the driver's total trip is the passenger actually taking?
   const ratio = Math.min(passengerTraveledDistance / rideTotalDistance, 1);
@@ -175,20 +198,13 @@ exports.getAllRides = async (req, res) => {
 
     // Safety First: Gender-Based Filtering
     const genderQuery = req.user.gender === 'male'
-      ? { genderPreference: 'any' } // Males only see 'any' rides
-      : {}; // Females see everything (any + female)
+      ? { genderPreference: { $in: ['any', 'male-only'] } }
+      : { genderPreference: { $in: ['any', 'female-only'] } };
 
     // Smart GPS Logic
     if (passengerLat && passengerLng && destinationLat && destinationLng) {
       const passengerCoords   = [parseFloat(passengerLng),  parseFloat(passengerLat)];
       const destinationCoords = [parseFloat(destinationLng), parseFloat(destinationLat)];
-
-      // SEARCH STRATEGY (Direct Boarding): 
-      // 1. Driver must START near the passenger's pickup (fromCoordinates)
-      if (startOfDay) {
-        console.log(`[SmartRadar] Searching for rides in range: ${startOfDay.toISOString()} to ${endOfDay.toISOString()}`);
-      }
-      console.log(`[SmartRadar] Passenger Pickup: [${passengerLng}, ${passengerLat}]`);
 
       const candidateRides = await Ride.find({
         ...query,
@@ -199,56 +215,78 @@ exports.getAllRides = async (req, res) => {
               type:        'Point',
               coordinates: passengerCoords
             },
-            $maxDistance: 25000 // Increased to 25km for better reliability
+            $maxDistance: 30000 // Boarding Rule: Within 30km of Raider Start
           }
         }
       }).populate('driver', 'name averageRating isVerified profilePhoto phone');
 
-      console.log(`[SmartRadar] Found ${candidateRides.length} rides starting near pickup.`);
+      console.log(`[SmartRadar] Analyzing ${candidateRides.length} potential rides for path proximity...`);
 
       const matchingRides = candidateRides
         .filter(ride => {
-          if (!ride.routePoints || !ride.routePoints.coordinates || ride.routePoints.coordinates.length < 2) {
-            return haversineDistance(ride.toCoordinates.coordinates, destinationCoords) <= 20;
-          }
-
-          const rPoints = ride.routePoints.coordinates;
+          const rPoints = (ride.routePoints && ride.routePoints.coordinates && ride.routePoints.coordinates.length >= 2) 
+            ? ride.routePoints.coordinates 
+            : [ride.fromCoordinates.coordinates, ride.toCoordinates.coordinates];
           
-          // 1. High-precision point check
-          let minDropoffDist = Infinity;
-          rPoints.forEach(p => {
-            const dist = haversineDistance(p, destinationCoords);
-            if (dist < minDropoffDist) minDropoffDist = dist;
-          });
-          if (minDropoffDist <= 20) return true;
+          let minPerpDist = Infinity;
+          let matched = false;
 
-          // 2. Linear Segment Check (The "Vellore Bridge")
-          // If the ride only has a few points, check if destination lies on any segment
           for (let i = 0; i < rPoints.length - 1; i++) {
              const start = rPoints[i];
              const end = rPoints[i+1];
-             const distTotal = haversineDistance(start, end);
-             const distToStart = haversineDistance(start, destinationCoords);
-             const distToEnd = haversineDistance(end, destinationCoords);
              
-             // If sum of distances is close to total segment length, it's a match
-             if ((distToStart + distToEnd) <= (distTotal + 5)) {
-                console.log(`[SmartRadar] SUCCESS: Ride ${ride._id} matched along segment.`);
-                return true;
+             const d1 = haversineDistance(start, destinationCoords);
+             const d2 = haversineDistance(end, destinationCoords);
+             const dTotal = haversineDistance(start, end);
+
+             // 1. Direct point match (20km sphere)
+             if (d1 <= 20 || d2 <= 20) {
+                minPerpDist = Math.min(minPerpDist, d1, d2);
+                matched = true;
+                break;
+             }
+
+             // 2. Segment match (Is destination near the line between A and B?)
+             // We use the Triangle Inequality: if P is near AB, then AP + PB is close to AB.
+             const detour = (d1 + d2) - dTotal;
+             if (detour <= 5) { // 5km detouring tolerance for segment check
+                // Calculate perpendicular distance to the segment
+                const s = (d1 + d2 + dTotal) / 2;
+                const tempArea = s * (s - d1) * (s - d2) * (s - dTotal);
+                const area = tempArea > 0 ? Math.sqrt(tempArea) : 0;
+                const perpDist = dTotal > 0 ? (2 * area) / dTotal : d1;
+                
+                minPerpDist = Math.min(minPerpDist, perpDist);
+                if (perpDist <= 20) {
+                   matched = true;
+                   break;
+                }
              }
           }
 
-          console.log(`[SmartRadar] REJECT: Ride ${ride._id} destination too far (MinDist: ${minDropoffDist}km)`);
-          return false; 
+          if (matched) {
+             console.log(`[SmartRadar] ✅ MATCH: Ride ${ride._id} is ${minPerpDist.toFixed(1)}km from your target.`);
+             return true;
+          }
+
+          console.log(`[SmartRadar] ❌ REJECT: Ride ${ride._id} is ${minPerpDist.toFixed(1)}km away (20km limit).`);
+          return false;
         })
         .map(ride => {
-          const distanceToRider = haversineDistance(passengerCoords, ride.fromCoordinates.coordinates).toFixed(1);
-          const fareForPassenger = calculatePartialFare(ride.fromCoordinates.coordinates, ride.toCoordinates.coordinates, passengerCoords, destinationCoords, ride.price);
+          const distanceToOrigin = haversineDistance(passengerCoords, ride.fromCoordinates.coordinates).toFixed(1);
+          
+          const fareForPassenger = calculatePartialFare(
+            ride.fromCoordinates.coordinates, 
+            ride.toCoordinates.coordinates,   
+            ride.fromCoordinates.coordinates, 
+            destinationCoords,                
+            ride.price
+          );
           
           const bookingDetails = {
             totalBooked:   ride.bookings.filter(b => b.status === 'confirmed').length,
             fareForPassenger,
-            distanceToRider: `${distanceToRider} km away`
+            distanceToRider: `${distanceToOrigin} km to meeting point`
           };
 
           return { ...ride.toObject(), bookingDetails, dynamicFare: fareForPassenger };
@@ -306,12 +344,19 @@ exports.getRideById = async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(5);
 
-    // Calculate Dynamic Fare if search coordinates provided
+    // Calculate Dynamic Fare matching the search result card logic
     let dynamicFare = ride.price;
     if (passengerLat && passengerLng && destinationLat && destinationLng) {
-      const pPickup = [parseFloat(passengerLng), parseFloat(passengerLat)];
       const pDropoff = [parseFloat(destinationLng), parseFloat(destinationLat)];
-      dynamicFare = calculatePartialFare(ride.fromCoordinates.coordinates, ride.toCoordinates.coordinates, pPickup, pDropoff, ride.price);
+      
+      // LOGIC: Fare is calculated from RAIDER START to CUSTOMER DROP-OFF (midway)
+      dynamicFare = calculatePartialFare(
+        ride.fromCoordinates.coordinates, // Driver Origin
+        ride.toCoordinates.coordinates,   // Driver Destination
+        ride.fromCoordinates.coordinates, // Meeting point is Driver origin
+        pDropoff,                         // Passenger Drop-off
+        ride.price
+      );
     }
 
     const responseData = {
