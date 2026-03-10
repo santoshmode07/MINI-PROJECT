@@ -6,6 +6,7 @@ const connectDB = require('./config/db');
 const authRoutes = require('./routes/auth');
 const rideRoutes = require('./routes/rideRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
+const bookingRoutes = require('./routes/bookings');
 
 // Load environment variables
 dotenv.config();
@@ -39,6 +40,7 @@ app.use(cors({
 app.use('/api/auth', authRoutes);
 app.use('/api/rides', rideRoutes);
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/bookings', bookingRoutes);
 
 // Simple health check endpoint
 app.get('/health', (req, res) => {

@@ -5,11 +5,13 @@ import {
   Search, MapPin, Calendar, Clock, Users, ArrowRight, ShieldCheck, 
   Star, Info, X, Navigation as NavIcon, Filter, User, IdCard, FileText, 
   ChevronRight, Car, Loader2, LayoutDashboard, LogOut, TrendingUp,
-  Map, Sparkles
+  Map, Sparkles, CheckCircle2, Phone, CreditCard, Banknote
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import BookingModal from '../components/BookingModal';
+import PassengerList from '../components/PassengerList';
 
 const RideCountdown = ({ date, time }) => {
   const [timeLeft, setTimeLeft] = useState('');
@@ -77,6 +79,7 @@ const RideResults = () => {
   const [loading, setLoading] = useState(true);
   const [selectedRide, setSelectedRide] = useState(null);
   const [bookingRide, setBookingRide] = useState(false);
+  const [showBookingModal, setShowBookingModal] = useState(false);
 
   const from = searchParams.get('from');
   const to = searchParams.get('to');
@@ -111,13 +114,45 @@ const RideResults = () => {
     fetchRides();
   }, [from, to, date, pLat, pLng, dLat, dLng]);
 
-  const handleBook = async (rideId) => {
+  const handleBook = (ride) => {
+    // 1. Initial Checks
+    if (ride.driver === user._id || ride.driver?._id === user._id) {
+       toast.error('You cannot book your own ride');
+       return;
+    }
+
+    if (ride.driverGender === 'female' && user.gender === 'male') {
+       toast.error('This ride is for female passengers only');
+       return;
+    }
+
+    if (ride.genderPreference === 'male-only' && user.gender === 'female') {
+       toast.error('This ride is for male passengers only');
+       return;
+    }
+
+    setShowBookingModal(true);
+  };
+
+  const handleConfirmBooking = async (paymentMethod) => {
     setBookingRide(true);
     try {
-      const res = await api.post(`/rides/book/${rideId}`);
+      const payload = {
+        rideId: selectedRide._id,
+        boardingAddress: selectedRide.from,
+        boardingCoordinates: selectedRide.fromCoordinates.coordinates,
+        dropoffAddress: to || selectedRide.to,
+        dropoffCoordinates: [parseFloat(dLng), parseFloat(dLat)],
+        paymentMethod
+      };
+
+      const res = await api.post('/bookings', payload);
+      
       if (res.data.success) {
-        toast.success('Ride booked successfully!');
+        toast.success('Ride booked successfully! Seat secured.');
+        setShowBookingModal(false);
         setSelectedRide(null);
+        
         // Refresh list
         const query = new URLSearchParams({
           from: from || '',
@@ -132,7 +167,7 @@ const RideResults = () => {
         setRides(refreshed.data.data);
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Booking failed');
+      toast.error(err.response?.data?.message || 'Booking failed. Try again.');
     } finally {
       setBookingRide(false);
     }
@@ -297,9 +332,22 @@ const RideResults = () => {
                                 {ride.bookingDetails?.distanceToRider || 'Location N/A'}
                              </p>
                            </div>
-                          <div className="flex items-center gap-2 px-1">
-                             <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                             <p className="text-[10px] font-black text-slate-400 italic tracking-tight">{ride.seatsAvailable} spaces open</p>
+                          <div className="flex flex-col px-1">
+                             {ride.passengerBreakdown && (
+                               <p className="text-[8px] font-black text-slate-400/60 uppercase tracking-widest mb-1 italic">
+                                  {ride.genderPreference === 'female-only' ? (
+                                     `${ride.passengerBreakdown.female}W SECURED`
+                                  ) : ride.genderPreference === 'male-only' ? (
+                                     `${ride.passengerBreakdown.male}M SECURED`
+                                  ) : (
+                                     `${ride.passengerBreakdown.male}M • ${ride.passengerBreakdown.female}W SECURED`
+                                  )}
+                               </p>
+                             )}
+                             <div className="flex items-center gap-2">
+                               <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                               <p className="text-[10px] font-black text-slate-400 italic tracking-tight">{ride.seatsAvailable} spaces open</p>
+                             </div>
                           </div>
                        </div>
                        <div className="text-right">
@@ -371,18 +419,49 @@ const RideResults = () => {
                       </button>
                    </div>
 
-                   {selectedRide.safetyMessage && (
-                     <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 p-8 rounded-[2.5rem] text-white flex items-center gap-8 mb-12 shadow-2xl shadow-indigo-200 relative overflow-hidden group">
-                        <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full translate-x-12 -translate-y-12 blur-3xl group-hover:scale-150 transition-transform duration-1000"></div>
-                        <div className="h-16 w-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shrink-0 border border-white/20">
-                           <ShieldCheck size={36} />
+                   {/* GENDER SAFETY BANNERS */}
+                   <div className="mb-12 space-y-4">
+                      {selectedRide.driverGender === 'female' && (
+                        <div className="bg-gradient-to-br from-rose-500 to-pink-600 p-8 rounded-[2.5rem] text-white flex items-center gap-8 shadow-2xl shadow-rose-100 relative overflow-hidden group">
+                           <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full translate-x-12 -translate-y-12 blur-3xl group-hover:scale-150 transition-transform duration-1000"></div>
+                           <div className="h-16 w-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shrink-0 border border-white/20">
+                              <ShieldCheck size={36} />
+                           </div>
+                           <div className="relative z-10">
+                              <p className="text-xl font-black italic mb-1 uppercase tracking-tight">🛡️ Verified Female-Led Voyage</p>
+                              <p className="text-rose-100 text-sm font-bold opacity-80 italic tracking-tight font-medium">Guaranteed Safe Space — For female passengers only. RaidDosthi Protocol Active.</p>
+                           </div>
                         </div>
-                        <div className="relative z-10">
-                           <p className="text-xl font-black italic mb-1 uppercase tracking-tight">{selectedRide.safetyMessage}</p>
-                           <p className="text-indigo-100 text-sm font-bold opacity-80 italic tracking-tight font-medium">This verified vehicle is a monitored safe zone within our community protocols.</p>
+                      )}
+
+                      {selectedRide.driverGender === 'male' && selectedRide.genderPreference === 'male-only' && (
+                        <div className="bg-gradient-to-br from-indigo-600 to-indigo-800 p-8 rounded-[2.5rem] text-white flex items-center gap-8 shadow-2xl shadow-indigo-100 relative overflow-hidden group">
+                           <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full translate-x-12 -translate-y-12 blur-3xl group-hover:scale-150 transition-transform duration-1000"></div>
+                           <div className="h-16 w-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shrink-0 border border-white/20">
+                              <Users size={36} />
+                           </div>
+                           <div className="relative z-10">
+                              <p className="text-xl font-black italic mb-1 uppercase tracking-tight">👥 Specialized Transit Protocol</p>
+                              <p className="text-indigo-100 text-sm font-bold opacity-80 italic tracking-tight font-medium">This vehicle contains male passengers only based on driver preference.</p>
+                           </div>
                         </div>
-                     </div>
-                   )}
+                      )}
+
+                      {selectedRide.driverGender === 'male' && selectedRide.genderPreference === 'any' && (
+                        <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200 flex items-center gap-6">
+                           <div className="h-12 w-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 shadow-sm border border-slate-100 italic font-black text-xl">
+                              ?
+                           </div>
+                           <div>
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Co-Rider Breakdown</p>
+                              <p className="text-sm font-black text-slate-700 italic">
+                                 {selectedRide.bookings?.filter(b => b.status === 'confirmed').length || 0} Passengers Booked 
+                                 <span className="text-indigo-600 ml-2">(Open to any gender)</span>
+                              </p>
+                           </div>
+                        </div>
+                      )}
+                   </div>
 
                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
                       <div className="space-y-12">
@@ -424,38 +503,63 @@ const RideResults = () => {
 
                       <div className="space-y-12">
                          <div>
-                             <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-[.3em] mb-6 flex items-center justify-between">
-                               <span className="flex items-center gap-3"><div className="h-1.5 w-1.5 rounded-full bg-indigo-600"></div> CO-TRAVELERS</span>
+                            <h4 className="text-[11px] font-black text-slate-500 uppercase tracking-[.3em] mb-6 flex items-center justify-between">
+                               <span className="flex items-center gap-3"><div className="h-1.5 w-1.5 rounded-full bg-indigo-600"></div> VERIFIED CO-RIDERS</span>
                                <span className="text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full font-black text-[10px] tracking-tight italic">{selectedRide.seatsAvailable} Free Space</span>
                             </h4>
-                            <div className="bg-[#F8FAFC] p-8 rounded-[3rem] border border-slate-100 space-y-8 shadow-inner">
-                               <div className="grid grid-cols-2 gap-4">
-                                  <div className="bg-white p-5 rounded-3xl border border-slate-200/50 text-center shadow-sm">
-                                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 font-outfit">Males</p>
-                                     <p className="text-2xl font-black text-slate-700 italic">{selectedRide.passengerBreakdown?.male}</p>
+                            
+                            {/* If user is the driver, show full Passenger List */}
+                            {(user._id === selectedRide.driver?._id || user._id === selectedRide.driver) ? (
+                              <PassengerList 
+                                passengers={selectedRide.bookings?.filter(b => b.status === 'confirmed')} 
+                                totalSeats={selectedRide.seatsAvailable + selectedRide.bookings?.filter(b => b.status === 'confirmed').length}
+                                remainingSeats={selectedRide.seatsAvailable}
+                              />
+                            ) : (
+                              <div className="bg-[#F8FAFC] p-8 rounded-[3rem] border border-slate-100 space-y-8 shadow-inner">
+                                {/* Gender Breakdown Summary */}
+                                {selectedRide.passengerBreakdown && (
+                                  <div className="flex items-center justify-center gap-4 mb-4">
+                                     {selectedRide.genderPreference !== 'female-only' && (
+                                        <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
+                                           <User size={12} className="text-indigo-600" />
+                                           <span className="text-[10px] font-black text-indigo-700 uppercase">{selectedRide.passengerBreakdown.male} Men</span>
+                                        </div>
+                                     )}
+                                     {selectedRide.genderPreference !== 'male-only' && (
+                                        <div className="flex items-center gap-2 bg-pink-50 px-3 py-1 rounded-full border border-pink-100">
+                                           <User size={12} className="text-pink-600" />
+                                           <span className="text-[10px] font-black text-pink-700 uppercase">{selectedRide.passengerBreakdown.female} Women</span>
+                                        </div>
+                                     )}
                                   </div>
-                                  <div className="bg-white p-5 rounded-3xl border border-slate-200/50 text-center shadow-sm">
-                                      <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 font-outfit">Females</p>
-                                     <p className="text-2xl font-black text-pink-500 italic">{selectedRide.passengerBreakdown?.female}</p>
-                                  </div>
-                               </div>
-                               
-                               <div className="flex flex-wrap items-center justify-center gap-2 pt-4 border-t border-slate-200/40">
-                                  {selectedRide.riders?.map((r, i) => (
-                                    <div key={i} className="group relative">
-                                       <div className="w-12 h-12 rounded-2xl border-4 border-white overflow-hidden bg-slate-200 shadow-xl group-hover:scale-110 transition-transform cursor-pointer ring-1 ring-slate-100">
-                                          {r.avatar ? <img src={r.avatar} className="w-full h-full object-cover" /> : <User size={24} className="m-auto mt-2.5 text-slate-500" />}
-                                       </div>
-                                       <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20 pointer-events-none font-bold">
-                                          {r.name}
-                                       </div>
-                                    </div>
-                                  ))}
-                                  {selectedRide.riders?.length === 0 && (
-                                     <div className="text-center py-4 text-slate-500 font-bold italic text-sm tracking-tight opacity-90">Be the first co-rider to join...</div>
-                                  )}
-                               </div>
-                            </div>
+                                )}
+
+                                <div className="flex flex-wrap items-center justify-center gap-2">
+                                   {selectedRide.bookings?.filter(b => b.status === 'confirmed').map((b, i) => (
+                                     <div key={i} className="group relative">
+                                        <div className="w-14 h-14 rounded-2xl border-4 border-white overflow-hidden bg-slate-200 shadow-xl group-hover:scale-110 transition-transform cursor-pointer ring-1 ring-slate-100">
+                                           {b.passenger?.profilePhoto ? (
+                                              <img src={b.passenger.profilePhoto} className="w-full h-full object-cover" />
+                                           ) : (
+                                              <div className="h-full w-full bg-indigo-600 flex items-center justify-center text-white font-black italic text-xl uppercase">
+                                                 {b.passenger?.name?.charAt(0) || '?'}
+                                              </div>
+                                           )}
+                                        </div>
+                                        <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[10px] p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20 pointer-events-none font-bold">
+                                           {b.passenger?.name} (Verified)
+                                        </div>
+                                     </div>
+                                   ))}
+                                   {selectedRide.bookings?.filter(b => b.status === 'confirmed').length === 0 && (
+                                      <div className="text-center py-4 text-slate-400 font-bold italic text-sm tracking-tight opacity-90 uppercase tracking-widest">No passengers yet...</div>
+                                   )}
+                                </div>
+                                <div className="h-[1px] bg-slate-200/50 w-full"></div>
+                                <p className="text-center text-[10px] font-black text-slate-400 tracking-widest uppercase">Only the driver can view full boarding profiles</p>
+                              </div>
+                            )}
                          </div>
 
                          <div>
@@ -569,21 +673,44 @@ const RideResults = () => {
                          </p>
                       </div>
 
-                      <button
-                        onClick={() => handleBook(selectedRide._id)}
-                        disabled={bookingRide || selectedRide.seatsAvailable === 0}
-                        className="w-full bg-indigo-600 hover:bg-white hover:text-indigo-900 disabled:bg-slate-800 disabled:text-slate-600 text-white py-5 rounded-3xl font-black text-lg shadow-[0_20px_50px_-10px_rgba(79,70,229,0.5)] transition-all flex items-center justify-center gap-4 active:scale-95 group uppercase tracking-tight italic"
-                      >
-                        {bookingRide ? <Loader2 className="animate-spin" /> : (
-                          <>
-                            Join Journey 
-                            <ArrowRight size={20} className="group-hover:translate-x-2 transition-transform" />
-                          </>
+                      {/* BOOKING BUTTON LOGIC */}
+                      <div className="space-y-4">
+                        {(user._id === selectedRide.driver?._id || user._id === selectedRide.driver) ? (
+                          <div className="w-full bg-slate-800 text-slate-400 py-6 rounded-3xl font-black text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-3 border border-white/5">
+                             <IdCard size={18} /> YOUR OWN RIDE
+                          </div>
+                        ) : selectedRide.bookings?.some(b => b.passenger._id === user._id && b.status === 'confirmed') ? (
+                          <div className="w-full bg-emerald-500 text-white py-6 rounded-3xl font-black text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-3 shadow-xl shadow-emerald-200">
+                             <CheckCircle2 size={18} /> JOURNEY SECURED
+                          </div>
+                        ) : selectedRide.seatsAvailable === 0 ? (
+                          <div className="w-full bg-slate-800 text-slate-500 py-6 rounded-3xl font-black text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-3 border border-white/5">
+                             RIDE AT CAPACITY
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => handleBook(selectedRide)}
+                            disabled={bookingRide}
+                            className="w-full bg-indigo-600 hover:bg-white hover:text-indigo-900 text-white py-6 rounded-3xl font-black text-lg shadow-[0_20px_50px_-10px_rgba(79,70,229,0.5)] transition-all flex items-center justify-center gap-4 active:scale-95 group uppercase tracking-tight italic"
+                          >
+                            {bookingRide ? <Loader2 className="animate-spin" /> : (
+                              <>
+                                Join Journey 
+                                <ArrowRight size={20} className="group-hover:translate-x-2 transition-transform" />
+                              </>
+                            )}
+                          </button>
                         )}
-                      </button>
-                      <div className="flex items-center justify-center gap-2 opacity-20">
-                         <ShieldCheck size={14} />
-                         <span className="text-[9px] font-black uppercase tracking-[.5em]">Global Transit Protocol V1.0</span>
+                        
+                        <div className="flex items-center justify-center gap-4 opacity-50">
+                           <div className="flex items-center gap-1.5 text-[9px] font-black uppercase text-indigo-300">
+                              <ShieldCheck size={12} /> SSL SECURED
+                           </div>
+                           <div className="h-1 w-1 rounded-full bg-slate-700"></div>
+                           <div className="flex items-center gap-1.5 text-[9px] font-black uppercase text-emerald-300">
+                              <Sparkles size={12} /> CASHLESS OPTION
+                           </div>
+                        </div>
                       </div>
                    </div>
                 </div>
@@ -591,6 +718,16 @@ const RideResults = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {/* PHASE 3 BOOKING MODAL */}
+      <BookingModal 
+         isOpen={showBookingModal}
+         onClose={() => setShowBookingModal(false)}
+         ride={selectedRide}
+         fare={selectedRide?.dynamicFare || selectedRide?.price}
+         isBooking={bookingRide}
+         onConfirm={handleConfirmBooking}
+      />
     </div>
   );
 };
