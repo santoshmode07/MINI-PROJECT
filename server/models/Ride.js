@@ -97,6 +97,21 @@ const rideSchema = new mongoose.Schema({
     enum: ['available', 'full', 'completed', 'cancelled'],
     default: 'available'
   },
+  simplifiedFrom: {
+    type: String,
+    trim: true,
+    index: true
+  },
+  simplifiedTo: {
+    type: String,
+    trim: true,
+    index: true
+  },
+  routePointsStatus: {
+    type: String,
+    enum: ['pending', 'saved', 'failed'],
+    default: 'saved'
+  },
   bookings: [{
     passenger: {
       type: mongoose.Schema.Types.ObjectId,
@@ -127,8 +142,38 @@ const rideSchema = new mongoose.Schema({
     bookedAt: {
       type: Date,
       default: Date.now
+    },
+    wasAffected: {
+      type: Boolean,
+      default: false
+    },
+    priorityBadgeGiven: {
+      type: Boolean,
+      default: false
+    },
+    alternativesShown: {
+      type: Boolean,
+      default: false
     }
-  }]
+  }],
+  cancellationReason: {
+    type: String
+  },
+  cancelledAt: {
+    type: Date
+  },
+  cancelledBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  noShowReports: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  wasAffectedByCancel: {
+    type: Boolean,
+    default: false
+  }
 }, {
   timestamps: true
 });

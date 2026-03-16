@@ -11,6 +11,8 @@ import FindRides from './pages/FindRides';
 import OfferRide from './pages/OfferRide';
 import RideResults from './pages/RideResults';
 import MyBookings from './pages/MyBookings';
+import MyRides from './pages/MyRides';
+import RidePassengers from './pages/RidePassengers';
 import Profile from './pages/Profile';
 import Home from './pages/Home';
 import { useAuth } from './context/AuthContext';
@@ -33,6 +35,8 @@ const App = () => {
             <Route path="/offer-ride" element={<OfferRide />} />
             <Route path="/ride-results" element={<RideResults />} />
             <Route path="/bookings" element={<MyBookings />} />
+            <Route path="/my-rides" element={<MyRides />} />
+            <Route path="/my-rides/:rideId/passengers" element={<RidePassengers />} />
             <Route path="/profile" element={<Profile />} />
         </Route>
 

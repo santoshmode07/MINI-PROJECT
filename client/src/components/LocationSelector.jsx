@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MapPin, Navigation, Loader2, Search, Map as MapIcon, X, Check, Sparkles } from 'lucide-react';
+import { toast } from 'react-toastify';
 import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -37,7 +38,16 @@ const LocationSelector = ({ label, placeholder, name, value, coordinates, onChan
     setIsLoading(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
-        const { latitude, longitude } = pos.coords;
+        const { latitude, longitude, accuracy } = pos.coords;
+        
+        // LOGIC: If accuracy is poor (>5km), it's likely an ISP Hub (like Hyderabad)
+        if (accuracy > 5000) {
+          toast.info("📍 Browser GPS is imprecise. Using ISP location (might be wrong city).", {
+            position: "bottom-center",
+            autoClose: 3000
+          });
+        }
+
         try {
           const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&addressdetails=1`);
           const data = await res.json();
@@ -48,12 +58,46 @@ const LocationSelector = ({ label, placeholder, name, value, coordinates, onChan
           setPinPos([latitude, longitude]);
         } catch (err) {
           console.error(err);
+          toast.error("Network error during location fetch");
         } finally {
           setIsLoading(false);
         }
       },
-      () => setIsLoading(false)
+      (err) => {
+        setIsLoading(false);
+        if (err.code === 1) toast.error("📍 Location access denied. Please enable GPS.");
+        else if (err.code === 3) toast.error("📍 Location request timed out.");
+      },
+      { 
+        enableHighAccuracy: true, 
+        timeout: 10000, 
+        maximumAge: 0 
+      }
     );
+  };
+
+  const [modalSearch, setModalSearch] = useState('');
+  const handleModalSearch = async (e) => {
+    e.preventDefault();
+    if (!modalSearch) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(modalSearch)}&format=json&countrycodes=in&limit=1`);
+      const data = await res.json();
+      if (data && data[0]) {
+        const lat = parseFloat(data[0].lat);
+        const lon = parseFloat(data[0].lon);
+        setMapCenter([lat, lon]);
+        setPinPos([lat, lon]);
+        handleReverseGeocode(lat, lon);
+      } else {
+        toast.error("Location not found");
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const simplifyAddress = (data) => {
@@ -278,6 +322,23 @@ const LocationSelector = ({ label, placeholder, name, value, coordinates, onChan
             
             {/* Rigid Map Body */}
             <div className="flex-1 md:flex-none relative h-full md:h-[500px] w-full bg-slate-100 overflow-hidden">
+              
+              {/* Internal Modal Search Bar */}
+              <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[1000] w-[90%] md:w-auto">
+                 <form onSubmit={handleModalSearch} className="flex gap-2 bg-white p-2 rounded-2xl shadow-2xl border border-slate-100">
+                    <input 
+                      type="text" 
+                      placeholder="Search your city/area..." 
+                      className="px-4 py-2 w-full md:w-64 focus:outline-none font-bold text-sm"
+                      value={modalSearch}
+                      onChange={(e) => setModalSearch(e.target.value)}
+                    />
+                    <button type="submit" className="bg-indigo-600 text-white p-2 rounded-xl hover:bg-slate-900 transition-all flex items-center justify-center">
+                       {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Search size={18} />}
+                    </button>
+                 </form>
+              </div>
+
               <MapContainer 
                 center={mapCenter} 
                 zoom={14} 

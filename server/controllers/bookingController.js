@@ -1,5 +1,6 @@
 const Ride = require('../models/Ride');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 const { calculatePartialFare } = require('../utils/fareHelper');
 
 // @desc    Book a ride
@@ -134,6 +135,16 @@ exports.bookRide = async (req, res) => {
       });
     }
 
+    // STEP 8 — Create Notification for Driver
+    await Notification.create({
+      user: ride.driver,
+      type: 'NEW_BOOKING',
+      title: 'New Booking!',
+      message: `${req.user.name} has joined your ride to ${ride.to}`,
+      rideId: ride._id,
+      passengerId: req.user._id
+    });
+
     res.status(201).json({
         success: true,
         message: 'Ride booked successfully',
@@ -257,6 +268,16 @@ exports.cancelBooking = async (req, res) => {
         status: 'available'
       });
     }
+
+    // STEP 6 — Notify Driver
+    await Notification.create({
+      user: ride.driver,
+      type: 'BOOKING_CANCELLED',
+      title: 'Booking Cancelled',
+      message: `${req.user.name} cancelled their booking for your ride to ${updatedRide.to}`,
+      rideId: updatedRide._id,
+      passengerId: req.user._id
+    });
 
     res.status(200).json({
       success: true,

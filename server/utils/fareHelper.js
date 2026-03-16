@@ -31,8 +31,9 @@ const calculatePartialFare = (
   const ratio = passengerDistance / totalDistance;
 
   // Round up to nearest rupee
-  // Minimum fare is ₹10
-  return Math.max(10, Math.ceil(fullPrice * ratio));
+  // Minimum fare is ₹10, Maximum is fullPrice
+  const calculatedFare = Math.ceil(fullPrice * ratio);
+  return Math.min(fullPrice, Math.max(10, calculatedFare));
 };
 
 module.exports = { haversineDistance, calculatePartialFare };
