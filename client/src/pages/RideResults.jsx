@@ -188,6 +188,13 @@ const RideResults = () => {
     }
   };
 
+   const getTrustScoreInfo = (score) => {
+     if (score >= 90) return { color: 'text-emerald-600 bg-emerald-50 border-emerald-100', label: 'Highly Reliable' };
+     if (score >= 70) return { color: 'text-amber-600 bg-amber-50 border-amber-100', label: 'Generally Reliable' };
+     if (score >= 50) return { color: 'text-orange-600 bg-orange-50 border-orange-100', label: 'Rides with Caution' };
+     return { color: 'text-rose-600 bg-rose-50 border-rose-100', label: 'Unreliable' };
+   };
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col font-outfit">
       <nav className="sticky top-0 left-0 right-0 z-[100] px-6 md:px-12 py-4 bg-white/70 backdrop-blur-2xl border-b border-slate-200/50 shadow-sm flex items-center justify-between">
@@ -238,6 +245,18 @@ const RideResults = () => {
                   {(!from && !to && !date) ? `Showing ${rides.length} global available rides` : `Showing ${rides.length} available rides for your route`}
                </p>
             </div>
+            
+            {/* Priority Passenger Badge */}
+            {user?.priorityBadgeExpires && new Date(user.priorityBadgeExpires) > new Date() && (
+               <div className="bg-indigo-600 text-white px-8 py-4 rounded-3xl shadow-xl shadow-indigo-200 border-2 border-indigo-400 flex items-center gap-3 animate-bounce">
+                  <Star fill="white" size={20} />
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest leading-none">Status: Priority Passenger</p>
+                    <p className="text-xs font-bold italic">Requests prioritized for 7 days</p>
+                  </div>
+               </div>
+            )}
+
             <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 h-fit">
                <button className="h-10 px-6 rounded-xl bg-white text-indigo-600 font-black text-xs shadow-sm uppercase tracking-widest flex items-center gap-2">
                   <Filter size={14} /> Filter 
@@ -290,7 +309,13 @@ const RideResults = () => {
                          {ride.driver?.avatar ? <img src={ride.driver.avatar} className="object-cover w-full h-full" /> : <User size={32} />}
                       </div>
                        <div className="flex-1">
-                          <h3 className="font-black text-slate-800 group-hover:text-indigo-600 transition-colors line-clamp-1 italic tracking-tight">{ride.driver?.name}</h3>
+                          <div className="flex items-center justify-between">
+                             <h3 className="font-black text-slate-800 group-hover:text-indigo-600 transition-colors line-clamp-1 italic tracking-tight">{ride.driver?.name}</h3>
+                             {/* Trust Score Badge */}
+                             <div className={`px-3 py-1 rounded-xl border font-black text-[8px] uppercase tracking-widest italic ${getTrustScoreInfo(ride.driver?.trustScore || 100).color}`}>
+                                {getTrustScoreInfo(ride.driver?.trustScore || 100).label}
+                             </div>
+                          </div>
                           <div className="flex items-center gap-3 mt-1.5">
                              <div className="flex bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-100 shadow-sm">
                                 <Star size={12} className="text-amber-500 fill-amber-500 mt-[1px] mr-1.5" />

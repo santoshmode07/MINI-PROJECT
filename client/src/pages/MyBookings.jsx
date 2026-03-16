@@ -3,15 +3,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   History, Calendar, Clock, MapPin, Navigation, 
   Trash2, AlertTriangle, Loader2, Search, Car,
-  Sparkles, ShieldCheck, Star, Phone, CreditCard, Banknote
+  Sparkles, ShieldCheck, Star, Phone, CreditCard, Banknote, XCircle
 } from 'lucide-react';
 import api from '../api/axios';
 import { toast } from 'react-toastify';
 import Navbar from '../components/Navbar';
 import { Link } from 'react-router-dom';
 import ReviewModal from '../components/ReviewModal';
+import { useAuth } from '../context/AuthContext';
 
 const MyBookings = () => {
+  const { user } = useAuth();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cancellingId, setCancellingId] = useState(null);
@@ -45,6 +47,18 @@ const MyBookings = () => {
       toast.error(err.response?.data?.message || 'Cancellation failed');
     } finally {
       setCancellingId(null);
+    }
+  };
+
+  const handleReportNoShow = async (rideId) => {
+    if (!window.confirm("Are you sure the rider did not show up? Reported drivers face strikes and trust score drops. False reports may affect your own standing.")) return;
+
+    try {
+      await api.post(`/rides/${rideId}/no-show`);
+      toast.success('Wait recorded. If other passengers also report, penalty will be applied.');
+      fetchBookings();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Report failed');
     }
   };
 
@@ -232,17 +246,52 @@ const MyBookings = () => {
                             </div>
                          </div>
 
-                         <div className="pt-4">
-                            {getRideStatus(b.ride.date, b.ride.time) === 'COMPLETED' ? (
+                         <div className="pt-4 space-y-3">
+                            {/* Cancellation Banner */}
+                            {(b.ride.status === 'cancelled' || b.booking.status === 'cancelled') && (
+                               <div className="bg-rose-50 border border-rose-100 p-4 rounded-2xl mb-4">
+                                  <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-1">Trip Cancelled</p>
+                                  <p className="text-xs font-bold text-slate-700">Reason: {b.ride.cancellationReason || "Not specified"}</p>
+                                  <Link to="/find-rides" className="mt-2 text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1 hover:underline">
+                                     Search Alternatives <Sparkles size={10} />
+                                  </Link>
+                               </div>
+                            )}
+
+                            {getRideStatus(b.ride.date, b.ride.time) === 'COMPLETED' || (b.ride.status === 'completed') ? (
                                <button 
                                  onClick={() => handleOpenReview(b.ride.driver)}
                                  className="w-full h-14 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 shadow-xl shadow-indigo-100 hover:scale-105 active:scale-95"
                                >
                                  <Star size={16} fill="currentColor" /> SHARE YOUR FEEDBACK
                                </button>
+                             ) : (b.ride.status === 'cancelled' || b.booking.status === 'cancelled') ? (
+                               <div className="w-full h-14 bg-slate-50 border border-slate-100 text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 opacity-60">
+                                  <XCircle size={16} /> Journey Terminated
+                               </div>
                              ) : getRideStatus(b.ride.date, b.ride.time) === 'ACTIVE' ? (
-                               <div className="w-full h-14 bg-slate-50 border border-slate-100 text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 cursor-not-allowed">
-                                  <AlertTriangle size={16} /> Ride Started — Protection Active
+                               <div className="space-y-3">
+                                  <div className="w-full h-14 bg-slate-50 border border-slate-100 text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 cursor-not-allowed">
+                                     <AlertTriangle size={16} /> Ride Started — Protection Active
+                                  </div>
+                                  
+                                  {/* No Show Button Logic: Current Time between Departure and Departure+30min */}
+                                  {(() => {
+                                      const now = new Date();
+                                      const departure = new Date(`${new Date(b.ride.date).toISOString().split('T')[0]}T${b.ride.time}`);
+                                      const diff = (now - departure) / (1000 * 60);
+                                      if (diff >= 0 && diff <= 30 && !b.ride.noShowReports?.includes(user?._id)) {
+                                         return (
+                                            <button 
+                                              onClick={() => handleReportNoShow(b.ride._id)}
+                                              className="w-full py-4 border-2 border-rose-100 text-rose-500 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-rose-50 transition-all flex items-center justify-center gap-2"
+                                            >
+                                              <AlertTriangle size={16} /> Rider Did Not Show Up
+                                            </button>
+                                         );
+                                      }
+                                      return null;
+                                  })()}
                                </div>
                              ) : (
                                <button 

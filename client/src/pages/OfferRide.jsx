@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   MapPin, Calendar, Clock, Users, Car, CreditCard, ShieldCheck, 
   ArrowRight, Loader2, Info, LayoutDashboard, LogOut, Sparkles,
-  ChevronRight, Briefcase, Navigation
+  ChevronRight, Briefcase, Navigation, AlertCircle, CheckCircle2,
+  Ban, Mail, Scale, History, ShieldAlert, Globe, Zap, X
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../api/axios';
@@ -17,6 +18,7 @@ const OfferRide = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
 
   const [formData, setFormData] = useState({
     from: '',
@@ -30,50 +32,10 @@ const OfferRide = () => {
     carNumber: '',
     price: '',
     genderPreference: user?.gender === 'female' ? 'female-only' : 'any',
-    waitingTime: 10
+    waitingTime: 10,
+    agreedToPolicy: false
   });
 
-  const [locationLoading, setLocationLoading] = useState(false);
-
-  // AUTO-FILL STARTING LOCATION
-  const autoFillLocation = async () => {
-    if (!navigator.geolocation) return;
-    setLocationLoading(true);
-
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          const lat = position.coords.latitude;
-          const lng = position.coords.longitude;
-
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
-          );
-          const data    = await response.json();
-          const address = data.display_name;
-
-          setFormData(prev => ({
-            ...prev,
-            from: address,
-            fromCoordinates: [lng, lat]
-          }));
-          toast.success('Pickup location auto-filled!');
-        } catch (error) {
-          console.error('Nominatim error:', error);
-        } finally {
-          setLocationLoading(false);
-        }
-      },
-      (error) => {
-        console.log('Location access denied');
-        setLocationLoading(false);
-      }
-    );
-  };
-
-  useEffect(() => {
-    autoFillLocation();
-  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -113,6 +75,56 @@ const OfferRide = () => {
       <Navbar />
 
       <main className="flex-1 pt-32 pb-24 px-6 relative overflow-hidden">
+        {/* Account Restriction Overlay */}
+        {user?.restrictedUntil && new Date(user.restrictedUntil) > new Date() && (
+          <div className="fixed inset-0 z-[200] bg-slate-900/90 backdrop-blur-xl flex items-center justify-center p-6 text-center">
+             <div className="max-w-xl w-full bg-white rounded-[4rem] p-12 shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-48 h-48 bg-rose-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                
+                <div className="flex flex-col items-center gap-6 mb-8">
+                   <div className="h-20 w-20 bg-rose-100 rounded-[2rem] flex items-center justify-center text-rose-600 shadow-xl shadow-rose-200">
+                      <Ban size={40} />
+                   </div>
+                   <h2 className="text-4xl font-black text-slate-900 tracking-tighter italic uppercase">Posting Restricted</h2>
+                   <p className="text-slate-500 font-medium tracking-tight">
+                      Your account has been temporarily restricted from offering rides due to a strike or excessive cancellations.
+                   </p>
+                </div>
+
+                <div className="bg-slate-50 p-8 rounded-[3rem] border border-slate-100 mb-10">
+                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 italic">Restriction Ends At</p>
+                   <p className="text-2xl font-black text-slate-900 italic uppercase">
+                      {new Date(user.restrictedUntil).toLocaleString('en-IN', { dateStyle: 'long', timeStyle: 'short' })}
+                   </p>
+                </div>
+
+                {/* Appeal Option inside restriction message */}
+                {user.appealCount < 2 && user.lastStrikeAt && (new Date() - new Date(user.lastStrikeAt)) < 48 * 60 * 60 * 1000 ? (
+                   <div className="bg-indigo-600 p-8 rounded-[3rem] text-white text-left space-y-4">
+                      <div className="flex items-center gap-3">
+                         <Mail size={18} />
+                         <p className="text-xs font-black uppercase tracking-widest">Believe this is unfair?</p>
+                      </div>
+                      <p className="text-[10px] font-bold opacity-80 leading-relaxed uppercase tracking-wider">
+                         Appeal within 48 hours by emailing support.raiddhosthi@gmail.com with your Email ID, Ride ID, and reason.
+                      </p>
+                   </div>
+                ) : (
+                   <div className="bg-slate-100 p-8 rounded-[3rem] text-slate-400 flex items-center justify-center gap-3">
+                      <Clock size={16} />
+                      <p className="text-[10px] font-black uppercase tracking-widest italic">Appeal window closed or limit reached</p>
+                   </div>
+                )}
+
+                <button 
+                  onClick={() => navigate('/dashboard')}
+                  className="mt-8 w-full py-5 text-slate-400 font-black text-xs uppercase tracking-widest hover:text-indigo-600 transition-colors"
+                >
+                   Return to Dashboard
+                </button>
+             </div>
+          </div>
+        )}
         {/* Background Decorative Circles */}
         <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-indigo-50/50 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2"></div>
         <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-purple-50/50 rounded-full blur-[100px] translate-y-1/2 -translate-x-1/2"></div>
@@ -281,10 +293,28 @@ const OfferRide = () => {
                    </div>
                </div>
 
+                {/* Professional T&C Section */}
+                <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl shadow-indigo-100/20">
+                   <label className="flex items-center gap-4 cursor-pointer group">
+                      <input 
+                         type="checkbox" 
+                         className="hidden" 
+                         checked={formData.agreedToPolicy}
+                         onChange={(e) => setFormData({...formData, agreedToPolicy: e.target.checked})}
+                      />
+                      <div className={`h-8 w-8 rounded-xl border-2 transition-all flex items-center justify-center shrink-0 ${formData.agreedToPolicy ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-200 group-hover:border-indigo-400'}`}>
+                         {formData.agreedToPolicy && <CheckCircle2 className="text-white" size={16} />}
+                      </div>
+                      <div className="flex-1 text-xs font-black text-slate-700 uppercase tracking-tight italic">
+                         I agree to the <button type="button" onClick={() => setShowTerms(true)} className="text-indigo-600 underline hover:text-slate-900 transition-colors">Terms & Conditions</button> and safety protocols.
+                      </div>
+                   </label>
+                </div>
+
                <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="w-full bg-indigo-600 hover:bg-slate-900 text-white p-7 rounded-[2.5rem] font-black text-xl shadow-xl shadow-indigo-100 transition-all flex items-center justify-center gap-4 active:scale-95 group"
+                  disabled={isSubmitting || !formData.agreedToPolicy}
+                  className={`w-full p-7 rounded-[2.5rem] font-black text-xl shadow-xl transition-all flex items-center justify-center gap-4 active:scale-95 group ${isSubmitting || !formData.agreedToPolicy ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' : 'bg-indigo-600 hover:bg-slate-900 text-white shadow-indigo-100'}`}
                >
                   {isSubmitting ? (
                     <Loader2 className="h-6 w-6 animate-spin" />
@@ -299,6 +329,90 @@ const OfferRide = () => {
           </form>
         </div>
       </main>
+
+      {/* Terms & Conditions Modal */}
+      <AnimatePresence>
+        {showTerms && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[300] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-6"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white w-full max-w-2xl rounded-[3.5rem] overflow-hidden shadow-2xl relative"
+            >
+              <div className="bg-slate-900 p-8 text-white flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <ShieldAlert className="text-indigo-400" size={24} />
+                  <h2 className="text-2xl font-black italic tracking-tight uppercase font-outfit">Safety & Legal Protocol</h2>
+                </div>
+                <button onClick={() => setShowTerms(false)} className="h-10 w-10 bg-white/10 hover:bg-white/20 rounded-xl flex items-center justify-center transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="p-10 max-h-[60vh] overflow-y-auto font-outfit custom-scrollbar">
+                <div className="space-y-10">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-6">
+                      <div className="flex gap-4">
+                        <Scale className="text-indigo-600 shrink-0" size={20} />
+                        <div>
+                          <p className="font-black text-slate-900 text-sm uppercase italic">Fair-Play Guarantee</p>
+                          <p className="text-xs text-slate-500 font-medium leading-relaxed italic">Cancellations within 30 mins result in an immediate strike and trust score penalty.</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-4">
+                        <Zap className="text-amber-500 shrink-0" size={20} />
+                        <div>
+                          <p className="font-black text-slate-900 text-sm uppercase italic">Trust Incentives</p>
+                          <p className="text-xs text-slate-500 font-medium leading-relaxed italic">Completion awards +5 Trust points. 10 consecutive trips unlock a +10 streak bonus.</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-6">
+                      <div className="flex gap-4">
+                        <History className="text-purple-600 shrink-0" size={20} />
+                        <div>
+                          <p className="font-black text-slate-900 text-sm uppercase italic">No-Show Liability</p>
+                          <p className="text-xs text-slate-500 font-medium leading-relaxed italic">If majority passengers report a no-show, account restriction is applied instantly.</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-4">
+                        <Globe className="text-emerald-600 shrink-0" size={20} />
+                        <div>
+                          <p className="font-black text-slate-900 text-sm uppercase italic">Conduct Standards</p>
+                          <p className="text-xs text-slate-500 font-medium leading-relaxed italic">ID matching is mandatory. Harassment lead to a permanent community ban.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                    <p className="text-[11px] font-bold text-slate-400 italic leading-relaxed text-center uppercase tracking-wider">
+                      Official Rider Terms v4.2 • Raid Dosti Ethics Committee
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-8 bg-slate-50 border-t border-slate-100">
+                <button 
+                  onClick={() => setShowTerms(false)}
+                  className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:bg-indigo-600 transition-all active:scale-95"
+                >
+                  Close & Acknowledgement
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       {/* Trust Footer */}
       <footer className="py-12 px-6 border-t border-slate-200/60 bg-white">

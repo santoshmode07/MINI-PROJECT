@@ -7,12 +7,17 @@ const authRoutes = require('./routes/auth');
 const rideRoutes = require('./routes/rideRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
 const bookingRoutes = require('./routes/bookings');
+const notificationRoutes = require('./routes/notificationRoutes');
+const { startCronJobs } = require('./controllers/rideController');
 
 // Load environment variables
 dotenv.config();
 
 // Connect to database
 connectDB();
+
+// Start Background Hardening Tasks
+startCronJobs();
 
 const app = express();
 
@@ -41,6 +46,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/rides', rideRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Simple health check endpoint
 app.get('/health', (req, res) => {

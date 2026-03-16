@@ -39,6 +39,10 @@ const userSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    lastMyRidesView: {
+        type: Date,
+        default: Date.now
+    },
     totalRatings: {
         type: Number,
         default: 0
@@ -50,6 +54,54 @@ const userSchema = new mongoose.Schema({
     profilePhoto: {
         type: String,
         default: ''
+    },
+    trustScore: {
+        type: Number,
+        default: 100
+    },
+    warnings: {
+        type: Number,
+        default: 0
+    },
+    strikes: {
+        type: Number,
+        default: 0
+    },
+    restrictedUntil: {
+        type: Date,
+        default: null
+    },
+    totalCancellations: {
+        type: Number,
+        default: 0
+    },
+    totalCompletedRides: {
+        type: Number,
+        default: 0
+    },
+    noShowCount: {
+        type: Number,
+        default: 0
+    },
+    priorityBadgeExpires: {
+        type: Date,
+        default: null
+    },
+    genuineClaimsThisYear: {
+        type: Number,
+        default: 0
+    },
+    appealCount: {
+        type: Number,
+        default: 0
+    },
+    appealYearReset: {
+        type: Date,
+        default: null
+    },
+    lastStrikeAt: {
+        type: Date,
+        default: null
     }
 }, {
     timestamps: true
