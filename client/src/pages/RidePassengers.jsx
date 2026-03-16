@@ -46,6 +46,7 @@ const RidePassengers = () => {
 
   const date = new Date(ride.date).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const confirmedCount = passengers.length;
+  const totalEarnings = passengers.reduce((sum, b) => sum + (b.totalDriverEarnings || b.fareCharged), 0);
 
   const handleCompleteRide = async () => {
     if (!window.confirm("Are you sure you have arrived and completed the journey? This will notify passengers and update your Trust Score.")) return;
@@ -114,8 +115,8 @@ const RidePassengers = () => {
 
               <div className="flex flex-col gap-4 min-w-[200px]">
                  <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-[2rem] border border-slate-700 text-center">
-                    <p className="text-4xl font-black text-white mb-1">₹{ride.price * confirmedCount}</p>
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Total Est. Earnings</p>
+                     <p className="text-4xl font-black text-white mb-1">₹{totalEarnings}</p>
+                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Total Final Earnings</p>
                  </div>
                  
                  {ride.status !== 'completed' && ride.status !== 'cancelled' && (
@@ -238,8 +239,13 @@ const PassengerCard = ({ booking }) => {
                 <div className="flex items-center gap-3">
                    <div className="bg-emerald-50 p-2 rounded-xl text-emerald-600"><Star size={16} /></div>
                    <div>
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Fare (Confirmed)</p>
-                      <p className="font-black text-slate-900 text-sm">₹{booking.fareCharged}</p>
+                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Individual Earning</p>
+                       <div className="flex flex-col">
+                          <p className="font-black text-slate-900 text-sm leading-tight">₹{booking.totalDriverEarnings || booking.fareCharged}</p>
+                          {booking.systemSubsidy > 0 && (
+                            <p className="text-[8px] font-bold text-emerald-600 italic">Incl. ₹{booking.systemSubsidy} Justice Subsidy</p>
+                          )}
+                       </div>
                    </div>
                 </div>
                 <div className="flex items-center gap-3">

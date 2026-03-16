@@ -5,7 +5,7 @@ import {
   Car, Calendar, Clock, MapPin, Users, ChevronRight, 
   AlertCircle, CheckCircle2, XCircle, ArrowRight,
   Plus, Loader2, Trash2, ShieldCheck, Timer,
-  Shield, Mail, Ban
+  Shield, Mail, Ban, AlertTriangle
 } from 'lucide-react';
 import api from '../api/axios';
 import Navbar from '../components/Navbar';
@@ -345,23 +345,39 @@ const RideCard = ({ ride, onCancel, isPast }) => {
          </div>
       </div>
 
-      <div className="flex items-center gap-6 p-4 bg-slate-50 rounded-2xl mb-8">
-         <div className="flex items-center gap-2">
-            <Calendar size={16} className="text-slate-400" />
-            <span className="text-xs font-bold text-slate-600">{date}</span>
-         </div>
-         <div className="flex items-center gap-2 border-l border-slate-200 pl-6">
-            <Clock size={16} className="text-slate-400" />
-            <span className="text-xs font-bold text-slate-600">{ride.time}</span>
-         </div>
-         <div className="flex items-center gap-2 border-l border-slate-200 pl-6">
-            <Users size={16} className="text-slate-400" />
-            <div className="flex gap-1">
-              {Array.from({ length: ride.totalBooked + ride.seatsRemaining }).map((_, i) => (
-                <div key={i} className={`w-3 h-3 rounded-full ${i < ride.totalBooked ? 'bg-indigo-600' : 'bg-slate-200'}`}></div>
-              ))}
+      <div className="flex flex-col gap-3 p-4 bg-slate-50 rounded-2xl mb-8">
+         <div className="flex items-center justify-between">
+            <div className="flex items-center gap-6">
+               <div className="flex items-center gap-2">
+                  <Calendar size={14} className="text-slate-400" />
+                  <span className="text-[10px] font-bold text-slate-600 uppercase">{date}</span>
+               </div>
+               <div className="flex items-center gap-2 border-l border-slate-200 pl-6">
+                  <Clock size={14} className="text-slate-400" />
+                  <span className="text-[10px] font-bold text-slate-600">{ride.time}</span>
+               </div>
             </div>
-            <span className="text-xs font-bold text-slate-600 ml-1">{ride.totalBooked} Team</span>
+            <div className="flex items-center gap-2">
+               <Users size={14} className="text-slate-400" />
+               <div className="flex gap-0.5">
+                 {Array.from({ length: ride.totalBooked + ride.seatsRemaining }).map((_, i) => (
+                   <div key={i} className={`w-2 h-2 rounded-full ${i < ride.totalBooked ? 'bg-indigo-600' : 'bg-slate-200'}`}></div>
+                 ))}
+               </div>
+            </div>
+         </div>
+         
+         <div className="pt-3 border-t border-slate-200/50 flex items-center justify-between">
+            <div>
+               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Potential Payout</p>
+               <p className="text-sm font-black text-slate-900">₹{ride.totalPotentialEarnings || (ride.price * ride.totalBooked)}</p>
+            </div>
+            {ride.totalSubsidyReceived > 0 && (
+               <div className="text-right">
+                  <p className="text-[9px] font-black text-emerald-500 uppercase tracking-widest leading-none mb-1">Justice Subsidy</p>
+                  <p className="text-sm font-black text-emerald-600">+₹{ride.totalSubsidyReceived}</p>
+               </div>
+            )}
          </div>
       </div>
 

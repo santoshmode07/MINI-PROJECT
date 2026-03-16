@@ -45,6 +45,27 @@ const Dashboard = () => {
             Where would you like to go today? Choose an option below to get started.
           </p>
         </motion.div>
+        
+        {/* Priority Passenger Badge - SHOUTOUT */}
+        {user?.priorityBadgeExpires && new Date(user.priorityBadgeExpires) > new Date() && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-2xl mb-12"
+          >
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-[2.5rem] p-8 text-white relative overflow-hidden shadow-2xl flex items-center gap-6 group">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
+              <div className="h-16 w-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shrink-0 border border-white/20 animate-bounce">
+                <Sparkles size={32} />
+              </div>
+              <div className="flex-1">
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-80 mb-1 leading-none">Status: Priority Passenger</p>
+                <h2 className="text-2xl font-black tracking-tight italic">You are a <span className="text-indigo-200 underline decoration-indigo-400">Featured Legend</span> this week.</h2>
+                <p className="text-indigo-100/80 text-xs font-medium italic mt-2">Due to a system delay or late cancellation, your next 7 days of transit are prioritized. <Link to="/priority-benefits" className="text-white underline font-black ml-1">See Benefits</Link></p>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {/* Driver awareness stats summary */}
         {driverStats?.activeRidesCount > 0 && (

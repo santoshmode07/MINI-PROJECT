@@ -60,7 +60,7 @@ const rideSchema = new mongoose.Schema({
   seatsAvailable: {
     type: Number,
     required: [true, 'Number of available seats is required'],
-    min: [1, 'At least 1 seat must be available']
+    min: [0, 'Available seats cannot be negative']
   },
   carModel: {
     type: String,
@@ -131,6 +131,14 @@ const rideSchema = new mongoose.Schema({
       coordinates: { type: [Number], default: [] }
     },
     fareCharged: {
+      type: Number,
+      default: 0
+    },
+    systemSubsidy: {
+      type: Number,
+      default: 0
+    },
+    totalDriverEarnings: {
       type: Number,
       default: 0
     },

@@ -100,6 +100,31 @@ const Profile = () => {
                   ))}
                </div>
 
+                {/* Priority Status — Justice Reward */}
+                {user?.priorityBadgeExpires && new Date(user.priorityBadgeExpires) > new Date() && (
+                  <motion.div 
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="mb-12 bg-gradient-to-r from-indigo-600 to-indigo-900 p-8 rounded-[3rem] text-white flex items-center justify-between shadow-2xl shadow-indigo-200 border border-indigo-400 relative overflow-hidden group"
+                  >
+                     <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full blur-3xl translate-x-12 -translate-y-12"></div>
+                     <div className="flex items-center gap-6 relative z-10">
+                        <div className="h-16 w-16 bg-white/10 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/20 animate-pulse text-indigo-200">
+                           <Award size={32} />
+                        </div>
+                        <div>
+                           <p className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-300 mb-1">Active Reward Protocol</p>
+                           <h3 className="text-2xl font-black italic tracking-tighter">Priority Search <span className="text-indigo-200 uppercase">Unlocked</span></h3>
+                           <p className="text-indigo-100/60 text-xs font-medium italic mt-1">Valid until {new Date(user.priorityBadgeExpires).toLocaleDateString()} — <Link to="/priority-benefits" className="text-white underline font-black ml-1">See Benefits</Link></p>
+                        </div>
+                     </div>
+                     <div className="bg-white/10 px-6 py-4 rounded-2xl border border-white/10 text-center relative z-10">
+                        <Star className="text-amber-400 fill-amber-400 mx-auto mb-1" size={16} />
+                        <p className="text-[9px] font-black uppercase tracking-widest text-white/80 leading-none">VIP Access</p>
+                     </div>
+                  </motion.div>
+                )}
+
                {/* Penalty & History Dashboard (New) */}
                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
                   <div className="bg-rose-50/50 p-8 rounded-[3rem] border border-rose-100/50 flex items-center gap-6">

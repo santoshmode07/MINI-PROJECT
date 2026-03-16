@@ -14,6 +14,7 @@ import MyBookings from './pages/MyBookings';
 import MyRides from './pages/MyRides';
 import RidePassengers from './pages/RidePassengers';
 import Profile from './pages/Profile';
+import PriorityBenefits from './pages/PriorityBenefits';
 import Home from './pages/Home';
 import { useAuth } from './context/AuthContext';
 
@@ -38,6 +39,7 @@ const App = () => {
             <Route path="/my-rides" element={<MyRides />} />
             <Route path="/my-rides/:rideId/passengers" element={<RidePassengers />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/priority-benefits" element={<PriorityBenefits />} />
         </Route>
 
         {/* Landing Page */}

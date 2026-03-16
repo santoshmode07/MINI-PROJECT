@@ -75,13 +75,26 @@ exports.bookRide = async (req, res) => {
       });
     }
 
-    // STEP 5 — Calculate partial fare
-    const fareCharged = calculatePartialFare(
+    // STEP 5 — Calculate partial fare + Justice Benefits check
+    let fareCharged = calculatePartialFare(
       ride.fromCoordinates.coordinates,
       ride.toCoordinates.coordinates,
       dropoffCoordinates,
       ride.price
     );
+
+    // JUSTICE PROTOCOL: Check for priority badge subsidy
+    let systemSubsidy = 0;
+    let totalDriverEarnings = fareCharged;
+    
+    const isPriorityUser = req.user.priorityBadgeExpires && new Date(req.user.priorityBadgeExpires) > new Date();
+    if (isPriorityUser) {
+      const originalFare = fareCharged;
+      fareCharged = Math.floor(originalFare * 0.9);
+      systemSubsidy = originalFare - fareCharged;
+      totalDriverEarnings = originalFare;
+      console.log(`[JusticeSystem] Priority Booking: Passenger pays ₹${fareCharged}, Platform covers ₹${systemSubsidy}. Raider receives full ₹${totalDriverEarnings}`);
+    }
 
     // STEP 6 — ATOMIC seat decrement + booking creation
     const updatedRide = await Ride.findOneAndUpdate(
@@ -113,6 +126,8 @@ exports.bookRide = async (req, res) => {
               coordinates: dropoffCoordinates
             },
             fareCharged,
+            systemSubsidy,
+            totalDriverEarnings,
             paymentMethod: paymentMethod || 'cash',
             bookedAt: new Date()
           }
