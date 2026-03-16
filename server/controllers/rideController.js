@@ -22,22 +22,22 @@ exports.completeRide = async (req, res) => {
     ride.status = 'completed';
     await ride.save();
 
-    // Increment Driver Stats
-    const driver = await User.findById(req.user._id);
-    driver.totalCompletedRides += 1;
-    driver.trustScore = Math.min(100, driver.trustScore + 5); // +5 for completion
+    // Use the already-attached req.user from authMiddleware to save a DB call
+    req.user.totalCompletedRides += 1;
+    // Raise Cap to 200 for 'Elite' Status
+    req.user.trustScore = Math.min(200, req.user.trustScore + 5); 
     
     // Streak bonus: every 10 rides completion
-    if (driver.totalCompletedRides > 0 && driver.totalCompletedRides % 10 === 0) {
-       driver.trustScore = Math.min(100, driver.trustScore + 10);
-       console.log(`[Trust] 🎖️ STREAK BONUS: Driver ${driver._id} completed 10th ride.`);
+    if (req.user.totalCompletedRides > 0 && req.user.totalCompletedRides % 10 === 0) {
+       req.user.trustScore = Math.min(200, req.user.trustScore + 10);
+       console.log(`[Trust] 🎖️ STREAK BONUS: Driver ${req.user._id} completed 10th ride.`);
     }
     
-    await driver.save();
+    await req.user.save();
 
-    console.log(`[RideComplete] ✅ Ride ${ride._id} completed by ${req.user._id}. Trust Score: ${driver.trustScore}`);
+    console.log(`[RideComplete] ✅ Ride ${ride._id} completed by ${req.user._id}. Trust Score: ${req.user.trustScore}`);
 
-    res.status(200).json({ success: true, message: 'Ride marked as completed. Trust Score increased!', trustScore: driver.trustScore });
+    res.status(200).json({ success: true, message: 'Ride marked as completed. Trust Score increased!', trustScore: req.user.trustScore });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -346,7 +346,7 @@ exports.getAllRides = async (req, res) => {
             $maxDistance: 35000 
           }
         }
-      }).populate('driver', 'name averageRating isVerified profilePhoto phone');
+      }).populate('driver', 'name averageRating trustScore isVerified profilePhoto phone');
 
       // Filter by: 1. Passes near Destination, 2. Source is before Destination in route
       const matchedByGPS = gpsCandidates.filter(ride => {
@@ -440,7 +440,7 @@ exports.getAllRides = async (req, res) => {
            { to: { $regex: cleanTo.split(' ')[0], $options: 'i' } }, // Fuzzy head word
            { simplifiedTo: { $regex: cleanTo, $options: 'i' } }
          ]
-       }).populate('driver', 'name averageRating isVerified profilePhoto phone');
+       }).populate('driver', 'name averageRating trustScore isVerified profilePhoto phone');
 
        console.log(`[RideSearch] Phase B: Found ${textCandidates.length} matches.`);
        CandidatePool.push(...textCandidates);
@@ -450,7 +450,7 @@ exports.getAllRides = async (req, res) => {
     if (!to || to === 'null' || to.trim() === '') {
        console.log(`[RideSearch] Phase C: Destination empty - browsing all.`);
        const allAvailable = await Ride.find({ ...query, ...genderQuery })
-         .populate('driver', 'name averageRating isVerified profilePhoto phone')
+         .populate('driver', 'name averageRating trustScore isVerified profilePhoto phone')
          .limit(50);
        CandidatePool.push(...allAvailable);
     }
@@ -462,9 +462,11 @@ exports.getAllRides = async (req, res) => {
 
     console.log(`[RideSearch] 🏁 FINAL POOL: ${finalCandidates.length} unique rides found.`);
 
-    // Final Processing: Fares and Breakdown
-    const results = finalCandidates.map(ride => {
-      // EDGE CASE 14: Partial Fare Capping
+    // REAL JUSTICE BENEFITS: Logic for Priority Passengers
+    const isPriorityUser = req.user.priorityBadgeExpires && new Date(req.user.priorityBadgeExpires) > new Date();
+
+    let results = finalCandidates.map(ride => {
+      // 1. Dynamic Fare Calculation
       let fare = ride.price;
       if (hasSourceGPS && hasDestGPS) {
         fare = calculatePartialFare(
@@ -478,6 +480,12 @@ exports.getAllRides = async (req, res) => {
         if (fare < 10) fare = 10;
       }
 
+      // 2. REAL BENEFIT: Justice Discount (10% OFF for victims of cancellations)
+      const originalFare = fare;
+      if (isPriorityUser) {
+        fare = Math.floor(fare * 0.9); // 10% Discount
+      }
+
       const confirmed = (ride.bookings || []).filter(b => b.status === 'confirmed');
       const breakdown = {
         male: confirmed.filter(b => b.passenger?.gender === 'male').length,
@@ -486,17 +494,32 @@ exports.getAllRides = async (req, res) => {
 
       const dist = hasSourceGPS ? haversineDistance([pLng, pLat], ride.fromCoordinates.coordinates).toFixed(1) : "?";
 
+      // 3. REAL BENEFIT: Priority Match (Identifying top 10% of drivers)
+      const isPriorityMatch = isPriorityUser && (ride.driver?.trustScore >= 90);
+
       return {
         ...ride.toObject(),
         passengerBreakdown: breakdown,
         bookingDetails: {
           totalBooked: confirmed.length,
           fareForPassenger: fare,
-          distanceToRider: hasSourceGPS ? `${dist} km away` : "Unknown dist"
+          originalFare: originalFare,
+          distanceToRider: hasSourceGPS ? `${dist} km away` : "Unknown dist",
+          isPriorityMatch,
+          justiceDiscountApplied: isPriorityUser
         },
         dynamicFare: fare
       };
     });
+
+    // 4. REAL BENEFIT: Priority Ranking (Sort Elite Drivers to the top for Priority Users)
+    if (isPriorityUser) {
+      results.sort((a, b) => {
+        if (a.bookingDetails.isPriorityMatch && !b.bookingDetails.isPriorityMatch) return -1;
+        if (!a.bookingDetails.isPriorityMatch && b.bookingDetails.isPriorityMatch) return 1;
+        return 0;
+      });
+    }
 
     return res.status(200).json({ success: true, count: results.length, data: results });
 
@@ -563,6 +586,14 @@ exports.getRideById = async (req, res) => {
       );
     }
 
+    // REAL JUSTICE BENEFITS: Sync with search results
+    const isPriorityUser = req.user.priorityBadgeExpires && new Date(req.user.priorityBadgeExpires) > new Date();
+    const originalFare = dynamicFare;
+    if (isPriorityUser) {
+      dynamicFare = Math.floor(dynamicFare * 0.9);
+    }
+    const isPriorityMatch = isPriorityUser && (ride.driver?.trustScore >= 90);
+
     return res.status(200).json({ 
       success: true, 
       data: {
@@ -570,9 +601,13 @@ exports.getRideById = async (req, res) => {
         passengerBreakdown: breakdown,
         driverReviews: reviews,
         dynamicFare,
+        originalFare,
         safetyMessage,
         bookingDetails: {
-           distanceToRider: "Calculating..."
+           distanceToRider: "Calculating...",
+           isPriorityMatch,
+           originalFare: originalFare,
+           justiceDiscountApplied: isPriorityUser
         }
       } 
     });
@@ -594,6 +629,9 @@ exports.getMyOffers = async (req, res) => {
     // Format rides with passenger counts and statuses
     const formattedRides = rides.map(ride => {
       const confirmed = ride.bookings.filter(b => b.status === 'confirmed');
+      const totalPotentialEarnings = confirmed.reduce((sum, b) => sum + (b.totalDriverEarnings || b.fareCharged), 0);
+      const totalSubsidyReceived = confirmed.reduce((sum, b) => sum + (b.systemSubsidy || 0), 0);
+
       const now = new Date();
       const departureTime = new Date(`${ride.date.toISOString().split('T')[0]}T${ride.time}`);
       
@@ -606,7 +644,9 @@ exports.getMyOffers = async (req, res) => {
         ...ride.toObject(),
         computedStatus,
         totalBooked: confirmed.length,
-        seatsRemaining: ride.seatsAvailable
+        seatsRemaining: ride.seatsAvailable,
+        totalPotentialEarnings,
+        totalSubsidyReceived
       };
     });
 
@@ -678,7 +718,7 @@ exports.cancelRide = async (req, res) => {
         // SCENARIO 3: < 30 min
         penaltyType = 'strike';
         trustImpact = 15; // -15 points for late strike
-        restrictionHours = 24;
+        restrictionHours = 168; // Increased to 1 week
       }
 
       // Genuine Emergency exception (Edge Case 3) - MISSION UPGRADE
@@ -709,15 +749,15 @@ exports.cancelRide = async (req, res) => {
     if (penaltyType === 'warning') {
       rider.warnings += 1;
       if (rider.warnings >= 3) {
-        restrictionHours = 24;
+        restrictionHours = 168; // Increased to 1 week
         rider.warnings = 0; // Reset after suspension
       }
     } else if (penaltyType === 'strike') {
       rider.strikes += 1;
       rider.lastStrikeAt = new Date();
-      if (rider.strikes === 1) restrictionHours = Math.max(restrictionHours, 24);
-      else if (rider.strikes === 2) restrictionHours = 48;
-      else if (rider.strikes === 3) restrictionHours = 168; // 7 days
+      if (rider.strikes === 1) restrictionHours = Math.max(restrictionHours, 168); // 1 Week
+      else if (rider.strikes === 2) restrictionHours = 336; // 2 Weeks
+      else if (rider.strikes === 3) restrictionHours = 720; // 1 Month
     }
 
     if (restrictionHours > 0) {

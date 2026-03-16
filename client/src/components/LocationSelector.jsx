@@ -323,20 +323,25 @@ const LocationSelector = ({ label, placeholder, name, value, coordinates, onChan
             {/* Rigid Map Body */}
             <div className="flex-1 md:flex-none relative h-full md:h-[500px] w-full bg-slate-100 overflow-hidden">
               
-              {/* Internal Modal Search Bar */}
+              {/* Internal Modal Search Bar (Fixed: Use div instead of form to avoid nested form error) */}
               <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[1000] w-[90%] md:w-auto">
-                 <form onSubmit={handleModalSearch} className="flex gap-2 bg-white p-2 rounded-2xl shadow-2xl border border-slate-100">
+                 <div className="flex gap-2 bg-white p-2 rounded-2xl shadow-2xl border border-slate-100">
                     <input 
                       type="text" 
                       placeholder="Search your city/area..." 
                       className="px-4 py-2 w-full md:w-64 focus:outline-none font-bold text-sm"
                       value={modalSearch}
                       onChange={(e) => setModalSearch(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleModalSearch(e)}
                     />
-                    <button type="submit" className="bg-indigo-600 text-white p-2 rounded-xl hover:bg-slate-900 transition-all flex items-center justify-center">
+                    <button 
+                      type="button" 
+                      onClick={handleModalSearch}
+                      className="bg-indigo-600 text-white p-2 rounded-xl hover:bg-slate-900 transition-all flex items-center justify-center"
+                    >
                        {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Search size={18} />}
                     </button>
-                 </form>
+                 </div>
               </div>
 
               <MapContainer 

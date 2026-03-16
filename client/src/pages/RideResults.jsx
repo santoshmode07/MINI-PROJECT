@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Search, MapPin, Calendar, Clock, Users, ArrowRight, ShieldCheck, 
+  Search, MapPin, Calendar, Clock, Users, ArrowRight, ArrowLeft, ShieldCheck, 
   Star, Info, X, Navigation as NavIcon, Filter, User, IdCard, FileText, 
   ChevronRight, Car, Loader2, LayoutDashboard, LogOut, TrendingUp,
   Map, Sparkles, CheckCircle2, Phone, CreditCard, Banknote
@@ -240,8 +240,13 @@ const RideResults = () => {
       <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-12 md:py-20">
          <div className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-6">
             <div>
-               <h2 className="text-3xl font-black text-slate-900 tracking-tight leading-none mb-2">Verified Trip <span className="text-indigo-600 italic">Connections.</span></h2>
-               <p className="text-slate-600 font-bold uppercase text-[10px] tracking-[0.3em]">
+               <div className="flex items-center gap-4 mb-2">
+                  <Link to="/find-rides" className="p-2 rounded-xl bg-slate-100 text-slate-500 hover:bg-indigo-600 hover:text-white transition-all shadow-sm">
+                    <ArrowLeft size={16} />
+                  </Link>
+                  <h2 className="text-3xl font-black text-slate-900 tracking-tight leading-none">Verified Trip <span className="text-indigo-600 italic">Connections.</span></h2>
+               </div>
+               <p className="text-slate-600 font-bold uppercase text-[10px] tracking-[0.3em] ml-12">
                   {(!from && !to && !date) ? `Showing ${rides.length} global available rides` : `Showing ${rides.length} available rides for your route`}
                </p>
             </div>
@@ -347,41 +352,54 @@ const RideResults = () => {
                       </div>
                    </div>
 
-                    <div className="pt-6 border-t border-slate-50 flex items-center justify-between">
-                       <div className="flex flex-col gap-1">
-                           <div className="bg-indigo-600/5 backdrop-blur-3xl px-4 py-2 rounded-2xl border border-indigo-100/50 flex items-center gap-2.5 group/dist hover:bg-indigo-600 hover:border-indigo-600 transition-all duration-300">
-                             <div className="h-6 w-6 bg-white rounded-lg flex items-center justify-center shadow-sm group-hover/dist:scale-110 transition-transform">
-                                <MapPin size={12} className="text-indigo-600" />
-                             </div>
-                             <p className="text-[11px] font-black text-indigo-900 italic tracking-tight group-hover/dist:text-white transition-colors">
-                                {ride.bookingDetails?.distanceToRider || 'Location N/A'}
-                             </p>
+                     <div className="pt-6 border-t border-slate-50 flex items-center justify-between">
+                        <div className="flex flex-col gap-1">
+                            <div className="bg-indigo-600/5 backdrop-blur-3xl px-4 py-2 rounded-2xl border border-indigo-100/50 flex items-center gap-2.5 group/dist hover:bg-indigo-600 hover:border-indigo-600 transition-all duration-300">
+                              <div className="h-6 w-6 bg-white rounded-lg flex items-center justify-center shadow-sm group-hover/dist:scale-110 transition-transform">
+                                 <MapPin size={12} className="text-indigo-600" />
+                              </div>
+                              <p className="text-[11px] font-black text-indigo-900 italic tracking-tight group-hover/dist:text-white transition-colors">
+                                 {ride.bookingDetails?.distanceToRider || 'Location N/A'}
+                              </p>
+                            </div>
+                           <div className="flex flex-col px-1">
+                              {ride.bookingDetails?.isPriorityMatch && (
+                                 <div className="flex items-center gap-1.5 text-[8px] font-black text-emerald-600 uppercase tracking-widest mb-1 italic">
+                                    <Sparkles size={10} className="animate-pulse" /> Priority Elite Match
+                                 </div>
+                              )}
+                              {ride.passengerBreakdown && (
+                                <p className="text-[8px] font-black text-slate-400/60 uppercase tracking-widest mb-1 italic">
+                                   {ride.genderPreference === 'female-only' ? (
+                                      `${ride.passengerBreakdown.female}W SECURED`
+                                   ) : ride.genderPreference === 'male-only' ? (
+                                      `${ride.passengerBreakdown.male}M SECURED`
+                                   ) : (
+                                      `${ride.passengerBreakdown.male}M • ${ride.passengerBreakdown.female}W SECURED`
+                                   )}
+                                </p>
+                              )}
+                              <div className="flex items-center gap-2">
+                                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                                <p className="text-[10px] font-black text-slate-400 italic tracking-tight">{ride.seatsAvailable} spaces open</p>
+                              </div>
                            </div>
-                          <div className="flex flex-col px-1">
-                             {ride.passengerBreakdown && (
-                               <p className="text-[8px] font-black text-slate-400/60 uppercase tracking-widest mb-1 italic">
-                                  {ride.genderPreference === 'female-only' ? (
-                                     `${ride.passengerBreakdown.female}W SECURED`
-                                  ) : ride.genderPreference === 'male-only' ? (
-                                     `${ride.passengerBreakdown.male}M SECURED`
-                                  ) : (
-                                     `${ride.passengerBreakdown.male}M • ${ride.passengerBreakdown.female}W SECURED`
-                                  )}
-                               </p>
-                             )}
-                             <div className="flex items-center gap-2">
-                               <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                               <p className="text-[10px] font-black text-slate-400 italic tracking-tight">{ride.seatsAvailable} spaces open</p>
-                             </div>
-                          </div>
-                       </div>
-                       <div className="text-right">
-                          <div className="bg-gradient-to-br from-indigo-600 to-indigo-700 px-6 py-3 rounded-2xl shadow-xl shadow-indigo-100 group-hover:scale-110 transition-transform">
-                             <p className="text-[10px] text-white/70 font-black uppercase tracking-widest mb-0.5">Your Fare</p>
-                             <p className="text-2xl font-black text-white leading-none tracking-tighter italic">₹{ride.bookingDetails?.fareForPassenger || ride.price}</p>
-                          </div>
-                       </div>
-                    </div>
+                        </div>
+                        <div className="text-right">
+                           <div className={`px-6 py-3 rounded-2xl shadow-xl transition-transform group-hover:scale-110 flex flex-col items-end ${ride.bookingDetails?.justiceDiscountApplied ? 'bg-gradient-to-br from-emerald-600 to-emerald-700 shadow-emerald-100' : 'bg-gradient-to-br from-indigo-600 to-indigo-700 shadow-indigo-100'}`}>
+                              {ride.bookingDetails?.justiceDiscountApplied && (
+                                 <p className="text-[7px] text-white font-black uppercase tracking-[0.2em] mb-1">Justice Discount Active</p>
+                              )}
+                              <p className="text-[10px] text-white/70 font-black uppercase tracking-widest mb-0.5">Your Fare</p>
+                              <div className="flex items-center gap-2">
+                                 {ride.bookingDetails?.justiceDiscountApplied && (
+                                   <span className="text-xs font-black text-white/40 line-through italic">₹{ride.bookingDetails.originalFare}</span>
+                                 )}
+                                 <p className="text-2xl font-black text-white leading-none tracking-tighter italic">₹{ride.bookingDetails?.fareForPassenger || ride.price}</p>
+                              </div>
+                           </div>
+                        </div>
+                     </div>
                  </motion.div>
               ))}
            </div>
@@ -656,10 +674,21 @@ const RideResults = () => {
                    <div className="relative z-10">
                       <div className="mb-8">
                          <p className="text-indigo-300/60 font-black text-[10px] uppercase tracking-[0.4em] mb-4 font-outfit">Smart Calculated Fare</p>
-                         <h3 className="text-5xl md:text-6xl font-black tracking-tighter leading-none flex items-start italic">
-                            <span className="text-2xl mt-2 mr-1 not-italic">₹</span>
-                            {selectedRide.dynamicFare || selectedRide.price}
-                         </h3>
+                          <div className="flex flex-col mb-4">
+                             {selectedRide.bookingDetails?.justiceDiscountApplied && (
+                                <div className="flex items-center gap-2 mb-2">
+                                   <span className="text-xl font-black text-slate-400 line-through italic opacity-50">₹{selectedRide.bookingDetails.originalFare || selectedRide.originalFare}</span>
+                                   <span className="bg-emerald-500 text-white text-[8px] font-black px-2 py-0.5 rounded-md uppercase tracking-widest animate-pulse">10% Justice OFF</span>
+                                </div>
+                             )}
+                             <h3 className="text-5xl md:text-6xl font-black tracking-tighter leading-none flex items-start italic">
+                                <span className="text-2xl mt-2 mr-1 not-italic">₹</span>
+                                {selectedRide.dynamicFare || selectedRide.price}
+                             </h3>
+                             {selectedRide.bookingDetails?.justiceDiscountApplied && (
+                                <p className="text-[9px] font-black text-emerald-400 mt-2 uppercase tracking-[0.2em] italic">🛡️ Protected communities pricing active</p>
+                             )}
+                          </div>
                          <div className="flex items-center gap-3 mt-4 ml-1">
                             <p className="text-slate-500 font-bold tracking-widest uppercase text-[10px]">Distance to Pickup:</p>
                              <p className="text-indigo-400 font-black text-xs italic">{selectedRide.bookingDetails?.distanceToRider || 'Detecting...'}</p>
