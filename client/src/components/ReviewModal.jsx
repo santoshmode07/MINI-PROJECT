@@ -4,7 +4,7 @@ import { X, Star, MessageSquare, ShieldCheck, Loader2, Send } from 'lucide-react
 import api from '../api/axios';
 import { toast } from 'react-toastify';
 
-const ReviewModal = ({ isOpen, onClose, driver, onReviewSuccess }) => {
+const ReviewModal = ({ isOpen, onClose, rideId, subject, onReviewSuccess }) => {
   const [rating, setRating] = useState(0);
   const [hover, setHover] = useState(0);
   const [comment, setComment] = useState('');
@@ -17,24 +17,24 @@ const ReviewModal = ({ isOpen, onClose, driver, onReviewSuccess }) => {
       return;
     }
     if (!comment.trim()) {
-      toast.error('Please share a brief comment about your journey');
+      toast.error('Please share a brief comment about your experience');
       return;
     }
 
     setSubmitting(true);
     try {
-      await api.post(`/reviews/${driver._id}`, { rating, comment });
-      toast.success('Your review has been logged. Thank you!');
+      await api.post(`/reviews/${rideId}/${subject._id}`, { rating, comment });
+      toast.success('Your feedback has been logged. Thank you!');
       if (onReviewSuccess) onReviewSuccess();
       onClose();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to submit review');
+      toast.error(err.response?.data?.message || 'Failed to submit feedback');
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (!driver) return null;
+  if (!subject || !rideId) return null;
 
   return (
     <AnimatePresence>
@@ -49,8 +49,8 @@ const ReviewModal = ({ isOpen, onClose, driver, onReviewSuccess }) => {
             {/* Header */}
             <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
               <div>
-                <h2 className="text-2xl font-black text-slate-900 tracking-tighter">Rate Your Journey</h2>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1 italic">How was your ride with {driver.name}?</p>
+                <h2 className="text-2xl font-black text-slate-900 tracking-tighter italic">Elite Feedback</h2>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1 italic">Rating your experience with {subject.name}</p>
               </div>
               <button 
                 onClick={onClose}
@@ -95,12 +95,12 @@ const ReviewModal = ({ isOpen, onClose, driver, onReviewSuccess }) => {
               {/* Comment Box */}
               <div className="space-y-4">
                 <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1 block flex items-center gap-2">
-                   <MessageSquare size={14} className="text-indigo-600" /> Share Journey Experience
+                   <MessageSquare size={14} className="text-indigo-600" /> Share Experience Details
                 </label>
                 <textarea
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
-                  placeholder="Tell us about the driver's safety, vehicle cleanliness, and overall experience..."
+                  placeholder="Tell us about the safety, punctuality, and overall journey experience..."
                   className="w-full h-32 p-6 rounded-3xl bg-slate-50 border border-slate-100 focus:border-indigo-600 focus:bg-white transition-all text-sm font-medium outline-none resize-none placeholder:text-slate-300 shadow-inner"
                 />
               </div>
@@ -109,7 +109,7 @@ const ReviewModal = ({ isOpen, onClose, driver, onReviewSuccess }) => {
               <div className="flex items-start gap-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-100">
                 <ShieldCheck className="text-emerald-600 shrink-0 mt-0.5" size={18} />
                 <p className="text-[10px] font-bold text-emerald-700 leading-relaxed uppercase tracking-tight italic">
-                  Your feedback helps maintain the RaidDosthi Safety Protocol. Verified reviews help others travel securely.
+                   Verified feedback maintained under RaidDosthi Safety Protocol. Your review helps keep the community travel secure.
                 </p>
               </div>
 
@@ -124,7 +124,7 @@ const ReviewModal = ({ isOpen, onClose, driver, onReviewSuccess }) => {
                 ) : (
                   <>
                     <Send size={20} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-                    SUBMIT VERIFIED REVIEW
+                    SUBMIT VERIFIED FEEDBACK
                   </>
                 )}
               </button>

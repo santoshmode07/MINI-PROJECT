@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   History, Calendar, Clock, MapPin, Navigation, 
-  Trash2, AlertTriangle, Loader2, Search, Car,
+  Trash2, AlertTriangle, Loader2, Search, Car, Wallet,
   Sparkles, ShieldCheck, Star, Phone, CreditCard, Banknote, XCircle
 } from 'lucide-react';
 import api from '../api/axios';
@@ -10,6 +10,7 @@ import { toast } from 'react-toastify';
 import Navbar from '../components/Navbar';
 import { Link } from 'react-router-dom';
 import ReviewModal from '../components/ReviewModal';
+import OTPDisplay from '../components/OTPDisplay';
 import { useAuth } from '../context/AuthContext';
 
 const MyBookings = () => {
@@ -17,8 +18,10 @@ const MyBookings = () => {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cancellingId, setCancellingId] = useState(null);
+  const [reportingId, setReportingId] = useState(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [selectedDriver, setSelectedDriver] = useState(null);
+  const [selectedRideId, setSelectedRideId] = useState(null);
 
   useEffect(() => {
     fetchBookings();
@@ -53,29 +56,38 @@ const MyBookings = () => {
   const handleReportNoShow = async (rideId) => {
     if (!window.confirm("Are you sure the rider did not show up? Reported drivers face strikes and trust score drops. False reports may affect your own standing.")) return;
 
+    setReportingId(rideId);
     try {
       await api.post(`/rides/${rideId}/no-show`);
-      toast.success('Wait recorded. If other passengers also report, penalty will be applied.');
+      toast.success('Your wait has been recorded. If others also report, a strike will be applied automatically.');
       fetchBookings();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Report failed');
+    } finally {
+      setReportingId(null);
     }
   };
 
-  const getRideStatus = (rideDate, rideTime) => {
+  const getRideStatus = (rideDate, rideTime, rideStatus) => {
+    if (rideStatus === 'completed') return 'COMPLETED';
+    if (rideStatus === 'cancelled') return 'CANCELLED';
+
     const departure = new Date(`${new Date(rideDate).toISOString().split('T')[0]}T${rideTime}`);
     const now = new Date();
     
-    if (now < departure) return 'UPCOMING';
-    // If it's within 6 hours of departure, consider it active
+    // Boarding window starts 5.5 minutes before departure
+    const boardingStart = new Date(departure.getTime() - 5.5 * 60 * 1000);
     const sixHoursLater = new Date(departure.getTime() + 6 * 60 * 60 * 1000);
+
+    if (now < boardingStart) return 'UPCOMING';
     if (now < sixHoursLater) return 'ACTIVE';
     
-    return 'COMPLETED';
+    return 'EXPIRED'; // Instead of COMPLETED, use EXPIRED if not marked by driver
   };
 
-  const handleOpenReview = (driver) => {
+  const handleOpenReview = (driver, rideId) => {
     setSelectedDriver(driver);
+    setSelectedRideId(rideId);
     setShowReviewModal(true);
   };
 
@@ -136,11 +148,11 @@ const MyBookings = () => {
                   >
                     {/* Status Badge */}
                     <div className="absolute top-8 right-8 flex items-center gap-3">
-                       {getRideStatus(b.ride.date, b.ride.time) === 'COMPLETED' ? (
+                       {getRideStatus(b.ride.date, b.ride.time, b.ride.status) === 'COMPLETED' ? (
                           <span className="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm bg-slate-100 text-slate-500 border border-slate-200">
                             ✨ JOURNEY ARCHIVED
                           </span>
-                       ) : getRideStatus(b.ride.date, b.ride.time) === 'ACTIVE' ? (
+                       ) : getRideStatus(b.ride.date, b.ride.time, b.ride.status) === 'ACTIVE' ? (
                           <span className="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm bg-emerald-50 text-emerald-600 border border-emerald-100">
                             ✅ ACTIVE JOURNEY
                           </span>
@@ -230,21 +242,61 @@ const MyBookings = () => {
                             </div>
                          </div>
 
-                         {/* Fare & Vehicle */}
+                         {/* Fare & Payment Status */}
                          <div className="grid grid-cols-2 gap-4">
-                            <div className="p-4 rounded-2xl bg-indigo-600 text-white shadow-xl shadow-indigo-100 relative overflow-hidden">
+                            <div className={`p-4 rounded-2xl ${
+                               b.booking.paymentMethod === 'wallet' ? 'bg-purple-600 shadow-purple-100' : 
+                               b.booking.paymentMethod === 'online' ? 'bg-indigo-600 shadow-indigo-100' : 
+                               'bg-slate-900 shadow-slate-100'
+                            } text-white shadow-xl relative overflow-hidden`}>
                                <div className="absolute top-0 right-0 h-12 w-12 bg-white/10 rounded-full blur-xl"></div>
-                               <p className="text-[9px] font-black text-indigo-100 uppercase tracking-widest">FARE PAID</p>
+                               <p className="text-[9px] font-black text-white/60 uppercase tracking-widest">FARE CHARGED</p>
                                <p className="text-2xl font-black italic">₹{b.booking.fareCharged}</p>
                             </div>
-                            <div className="p-4 rounded-2xl bg-slate-900 text-white shadow-xl shadow-slate-200">
-                               <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">PAYMENT</p>
-                               <div className="flex items-center gap-1.5 mt-1 font-black italic text-xs uppercase italic">
-                                  {b.booking.paymentMethod === 'online' ? <CreditCard size={14} className="text-emerald-400" /> : <Banknote size={14} className="text-amber-400" />}
-                                  {b.booking.paymentMethod}
+                            <div className="p-4 rounded-2xl bg-white border border-slate-100 flex flex-col justify-between">
+                               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2">METHOD</p>
+                               <div className="flex items-center gap-2">
+                                  {b.booking.paymentMethod === 'wallet' ? (
+                                    <div className="flex items-center gap-1.5 font-black italic text-[11px] text-purple-600 uppercase">
+                                       <Wallet size={14} /> Wallet
+                                    </div>
+                                  ) : b.booking.paymentMethod === 'online' ? (
+                                    <div className="flex items-center gap-1.5 font-black italic text-[11px] text-indigo-600 uppercase">
+                                       <CreditCard size={14} /> Online
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-1.5 font-black italic text-[11px] text-slate-500 uppercase">
+                                       <Banknote size={14} /> Cash
+                                    </div>
+                                  )}
                                </div>
                             </div>
                          </div>
+
+                         {/* Wallet Escrow Status */}
+                         {b.booking.paymentMethod === 'wallet' && (
+                            <div className="bg-purple-50 border border-purple-100 p-4 rounded-2xl">
+                               <p className="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-1.5">Escrow Protocol Status</p>
+                               <div className="flex items-center gap-2">
+                                  {b.booking.moneyReleased ? (
+                                     <>
+                                        <div className="h-1.5 w-1.5 rounded-full bg-purple-600 animate-pulse"></div>
+                                        <p className="text-[10px] font-black text-purple-700 uppercase italic">₹{b.booking.fareCharged} released to driver</p>
+                                     </>
+                                  ) : b.booking.refundProcessed ? (
+                                     <>
+                                        <div className="h-1.5 w-1.5 rounded-full bg-emerald-500"></div>
+                                        <p className="text-[10px] font-black text-emerald-700 uppercase italic">₹{b.booking.fareCharged} refunded to wallet</p>
+                                     </>
+                                  ) : (
+                                     <>
+                                        <div className="h-1.5 w-1.5 rounded-full bg-purple-400 animate-bounce"></div>
+                                        <p className="text-[10px] font-black text-purple-600 uppercase italic">₹{b.booking.fareCharged} held from wallet</p>
+                                     </>
+                                  )}
+                               </div>
+                            </div>
+                         )}
 
                          <div className="pt-4 space-y-3">
                             {/* Cancellation Banner */}
@@ -258,50 +310,30 @@ const MyBookings = () => {
                                </div>
                             )}
 
-                            {getRideStatus(b.ride.date, b.ride.time) === 'COMPLETED' || (b.ride.status === 'completed') ? (
-                               <button 
-                                 onClick={() => handleOpenReview(b.ride.driver)}
-                                 className="w-full h-14 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 shadow-xl shadow-indigo-100 hover:scale-105 active:scale-95"
-                               >
-                                 <Star size={16} fill="currentColor" /> SHARE YOUR FEEDBACK
-                               </button>
-                             ) : (b.ride.status === 'cancelled' || b.booking.status === 'cancelled') ? (
-                               <div className="w-full h-14 bg-slate-50 border border-slate-100 text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 opacity-60">
-                                  <XCircle size={16} /> Journey Terminated
-                               </div>
-                             ) : getRideStatus(b.ride.date, b.ride.time) === 'ACTIVE' ? (
-                               <div className="space-y-3">
-                                  <div className="w-full h-14 bg-slate-50 border border-slate-100 text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 cursor-not-allowed">
-                                     <AlertTriangle size={16} /> Ride Started — Protection Active
-                                  </div>
-                                  
-                                  {/* No Show Button Logic: Current Time between Departure and Departure+30min */}
-                                  {(() => {
-                                      const now = new Date();
-                                      const departure = new Date(`${new Date(b.ride.date).toISOString().split('T')[0]}T${b.ride.time}`);
-                                      const diff = (now - departure) / (1000 * 60);
-                                      if (diff >= 0 && diff <= 30 && !b.ride.noShowReports?.includes(user?._id)) {
-                                         return (
-                                            <button 
-                                              onClick={() => handleReportNoShow(b.ride._id)}
-                                              className="w-full py-4 border-2 border-rose-100 text-rose-500 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] hover:bg-rose-50 transition-all flex items-center justify-center gap-2"
-                                            >
-                                              <AlertTriangle size={16} /> Rider Did Not Show Up
-                                            </button>
-                                         );
-                                      }
-                                      return null;
-                                  })()}
-                               </div>
-                             ) : (
-                               <button 
-                                 onClick={() => handleCancelBooking(b.ride._id)}
-                                 disabled={cancellingId === b.ride._id}
-                                 className="w-full h-14 bg-white border border-rose-100 text-rose-500 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 hover:bg-rose-500 hover:text-white"
-                               >
-                                 {cancellingId === b.ride._id ? <Loader2 className="animate-spin" size={16} /> : <><Trash2 size={16} /> Cancel Trip</>}
-                               </button>
-                             )}
+                             {getRideStatus(b.ride.date, b.ride.time, b.ride.status) === 'COMPLETED' ? (
+                                <button 
+                                  onClick={() => handleOpenReview(b.ride.driver, b.ride._id)}
+                                  className="w-full h-14 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 shadow-xl shadow-indigo-100 hover:scale-105 active:scale-95"
+                                >
+                                  <Star size={16} fill="currentColor" /> SHARE YOUR FEEDBACK
+                                </button>
+                              ) : (b.ride.status === 'cancelled' || b.booking.status === 'cancelled') ? (
+                                <div className="w-full h-14 bg-slate-50 border border-slate-100 text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 opacity-60">
+                                   <XCircle size={16} /> Journey Terminated
+                                </div>
+                              ) : getRideStatus(b.ride.date, b.ride.time, b.ride.status) === 'ACTIVE' ? (
+                                 <div className="mt-8">
+                                    <OTPDisplay booking={b.booking} ride={b.ride} />
+                                 </div>
+                              ) : (
+                                 <button 
+                                   onClick={() => handleCancelBooking(b.ride._id)}
+                                   disabled={cancellingId === b.ride._id}
+                                   className="w-full h-14 bg-white border border-rose-100 text-rose-500 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 hover:bg-rose-500 hover:text-white"
+                                 >
+                                   {cancellingId === b.ride._id ? <Loader2 className="animate-spin" size={16} /> : <><Trash2 size={16} /> Cancel Trip</>}
+                                 </button>
+                              )}
                          </div>
                       </div>
                     </div>
@@ -316,7 +348,8 @@ const MyBookings = () => {
       <ReviewModal 
         isOpen={showReviewModal}
         onClose={() => setShowReviewModal(false)}
-        driver={selectedDriver}
+        rideId={selectedRideId}
+        subject={selectedDriver}
       />
     </div>
   );

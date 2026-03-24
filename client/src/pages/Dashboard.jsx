@@ -2,7 +2,7 @@ import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Search, MapPin, ArrowRight, Sparkles, TrendingUp } from 'lucide-react';
+import { Search, MapPin, ArrowRight, Sparkles, TrendingUp, Ban, AlertTriangle } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { useNotifications } from '../context/NotificationContext';
 
@@ -46,23 +46,40 @@ const Dashboard = () => {
           </p>
         </motion.div>
         
-        {/* Priority Passenger Badge - SHOUTOUT */}
-        {user?.priorityBadgeExpires && new Date(user.priorityBadgeExpires) > new Date() && (
+        {/* Account Restricted Status — JUSTICE SYTEM FEEDBACK */}
+        {user?.restrictedUntil && new Date(user.restrictedUntil) > new Date() && (
           <motion.div 
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-2xl mb-12"
+            className="w-full max-w-4xl mb-12"
           >
-            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-[2.5rem] p-8 text-white relative overflow-hidden shadow-2xl flex items-center gap-6 group">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2"></div>
-              <div className="h-16 w-16 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shrink-0 border border-white/20 animate-bounce">
-                <Sparkles size={32} />
-              </div>
-              <div className="flex-1">
-                <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-80 mb-1 leading-none">Status: Priority Passenger</p>
-                <h2 className="text-2xl font-black tracking-tight italic">You are a <span className="text-indigo-200 underline decoration-indigo-400">Featured Legend</span> this week.</h2>
-                <p className="text-indigo-100/80 text-xs font-medium italic mt-2">Due to a system delay or late cancellation, your next 7 days of transit are prioritized. <Link to="/priority-benefits" className="text-white underline font-black ml-1">See Benefits</Link></p>
-              </div>
+            <div className="bg-rose-600 rounded-[3rem] p-10 text-white relative overflow-hidden shadow-2xl shadow-rose-200 border-4 border-rose-500/50">
+               <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+               <div className="relative z-10 flex flex-col md:flex-row items-center gap-10">
+                  <div className="h-20 w-20 bg-white shadow-xl rounded-[2rem] flex items-center justify-center shrink-0 border-4 border-rose-400 animate-pulse">
+                    <Ban size={40} className="text-rose-600" />
+                  </div>
+                  <div className="flex-1 text-center md:text-left">
+                    <div className="inline-flex items-center gap-2 bg-rose-700/50 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-4 border border-rose-400/30">
+                       <AlertTriangle size={12} /> System Restriction Active
+                    </div>
+                    <h2 className="text-3xl font-black tracking-tight italic mb-3 leading-none italic uppercase">Transit Privileges Revoked</h2>
+                    <p className="text-rose-100 font-medium text-sm max-w-xl leading-relaxed italic opacity-90">
+                       Your account was automatically restricted following a <span className="text-white font-black underline decoration-rose-300">Majority No-Show Report</span> from your recent passengers. We uphold a strict promptness policy to ensure communal safety and trust.
+                    </p>
+                    
+                    <div className="flex flex-wrap items-center gap-6 mt-8 pt-6 border-t border-rose-400/30">
+                       <div className="bg-rose-900/40 backdrop-blur-md px-6 py-3 rounded-2xl border border-rose-400/20">
+                          <p className="text-[9px] font-black text-rose-300 uppercase tracking-widest mb-1">Status Ends</p>
+                          <p className="text-lg font-black">{new Date(user.restrictedUntil).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+                       </div>
+                       <div className="bg-rose-900/40 backdrop-blur-md px-6 py-3 rounded-2xl border border-rose-400/20">
+                          <p className="text-[9px] font-black text-rose-300 uppercase tracking-widest mb-1">Wait Time remaining</p>
+                          <p className="text-lg font-black italic">{Math.ceil((new Date(user.restrictedUntil) - new Date()) / (1000 * 60 * 60))} Hours</p>
+                       </div>
+                    </div>
+                  </div>
+               </div>
             </div>
           </motion.div>
         )}

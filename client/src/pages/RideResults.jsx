@@ -13,7 +13,7 @@ import { useAuth } from '../context/AuthContext';
 import BookingModal from '../components/BookingModal';
 import PassengerList from '../components/PassengerList';
 
-const RideCountdown = ({ date, time }) => {
+const RideCountdown = ({ date, time, expiresAt }) => {
   const [timeLeft, setTimeLeft] = useState('');
 
   useEffect(() => {
@@ -21,34 +21,34 @@ const RideCountdown = ({ date, time }) => {
       try {
         if (!date || !time) return;
         
-        // Ensure date is YYYY-MM-DD
+        // Parse departure time
         const datePart = (typeof date === 'string' && date.includes('T')) ? date.split('T')[0] : date;
-        // Fix for time if it's not HH:mm:ss
-        const timePart = time.length === 5 ? `${time}:00` : time;
+        const [hours, minsPart] = time.split(':');
+        const departure = new Date(datePart);
+        departure.setHours(parseInt(hours), parseInt(minsPart), 0, 0);
         
-        const startAt = new Date(`${datePart}T${timePart}`);
-        const difference = startAt - new Date();
+        const now = new Date();
+        const expiry = expiresAt ? new Date(expiresAt) : new Date(departure.getTime() + 10 * 60000); // Fallback to +10 mins
         
-        if (isNaN(startAt.getTime())) {
-          setTimeLeft('SCHEDULED');
-          return;
-        }
+        if (now < departure) {
+          const diff = departure - now;
+          const hoursLeft = Math.floor(diff / (1000 * 60 * 60));
+          const mins = Math.floor((diff / 60000) % 60);
+          const secs = Math.floor((diff % 60000) / 1000);
 
-        if (difference <= 0) {
-          setTimeLeft('DEPARTED');
-          return;
-        }
-
-        const hours = Math.floor((difference / (1000 * 60 * 60)));
-        const mins = Math.floor((difference / 1000 / 60) % 60);
-        const secs = Math.floor((difference / 1000) % 60);
-
-        if (hours > 24) {
-          setTimeLeft(`${Math.floor(hours / 24)}d ${hours % 24}h`);
-        } else if (hours > 0) {
-          setTimeLeft(`${hours}h ${mins}m`);
+          if (hoursLeft > 24) {
+            setTimeLeft(`${Math.floor(hoursLeft / 24)}d ${hoursLeft % 24}h`);
+          } else if (hoursLeft > 0) {
+            setTimeLeft(`${hoursLeft}h ${mins}m`);
+          } else if (mins > 0) {
+            setTimeLeft(`${mins}m ${secs}s left`);
+          } else {
+            setTimeLeft(`${secs}s left`);
+          }
+        } else if (now < expiry) {
+          setTimeLeft('BOARDING');
         } else {
-          setTimeLeft(`${mins}m ${secs}s`);
+          setTimeLeft('EXPIRED');
         }
       } catch (err) {
         setTimeLeft('READY');
@@ -58,7 +58,7 @@ const RideCountdown = ({ date, time }) => {
     calculateTimeLeft();
     const timer = setInterval(calculateTimeLeft, 1000);
     return () => clearInterval(timer);
-  }, [date, time]);
+  }, [date, time, expiresAt]);
 
   if (!timeLeft) return null;
 
@@ -134,7 +134,7 @@ const RideResults = () => {
     setShowBookingModal(true);
   };
 
-  const handleConfirmBooking = async (paymentMethod) => {
+  const handleConfirmBooking = async (paymentMethod, paymentIntentId) => {
     setBookingRide(true);
     try {
       const payload = {
@@ -143,7 +143,8 @@ const RideResults = () => {
         boardingCoordinates: selectedRide.fromCoordinates.coordinates,
         dropoffAddress: to || selectedRide.to,
         dropoffCoordinates: [parseFloat(dLng), parseFloat(dLat)],
-        paymentMethod
+        paymentMethod,
+        paymentIntentId
       };
 
       const res = await api.post('/bookings', payload);
@@ -327,7 +328,7 @@ const RideResults = () => {
                                 <span className="text-[10px] font-black text-amber-700 italic tracking-tighter">{ride.driver?.averageRating || 'NEW'}</span>
                              </div>
                              <div className="h-4 w-[1px] bg-slate-200"></div>
-                             <RideCountdown date={ride.date} time={ride.time} />
+                             <RideCountdown date={ride.date} time={ride.time} expiresAt={ride.expiresAt} />
                           </div>
                        </div>
                    </div>
@@ -779,6 +780,7 @@ const RideResults = () => {
          onClose={() => setShowBookingModal(false)}
          ride={selectedRide}
          fare={selectedRide?.dynamicFare || selectedRide?.price}
+         dropoffCoordinates={[parseFloat(dLng), parseFloat(dLat)]}
          isBooking={bookingRide}
          onConfirm={handleConfirmBooking}
       />

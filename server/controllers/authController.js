@@ -181,9 +181,63 @@ const getUserProfile = async (req, res) => {
     }
 };
 
+const Transaction = require('../models/Transaction');
+
+/**
+ * @desc    Top up wallet
+ * @route   POST /api/auth/wallet/topup
+ * @access  Private
+ */
+const topUpWallet = async (req, res) => {
+    try {
+        const { amount } = req.body;
+        if (!amount || amount <= 0) {
+            return res.status(400).json({ success: false, message: 'Please provide a valid amount' });
+        }
+
+        const user = await User.findById(req.user._id);
+        user.walletBalance += Number(amount);
+        await user.save();
+
+        // Record Transaction
+        await Transaction.create({
+            userId: user._id,
+            type: 'TOPUP',
+            amount: Number(amount),
+            description: 'Funds added to wallet via digital top-up'
+        });
+
+        res.status(200).json({
+            success: true,
+            message: `₹${amount} added to your wallet`,
+            data: user.toJSON()
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+/**
+ * @desc    Get user transactions
+ * @route   GET /api/auth/wallet/transactions
+ * @access  Private
+ */
+const getMyTransactions = async (req, res) => {
+    try {
+        const transactions = await Transaction.find({ userId: req.user._id })
+            .sort({ createdAt: -1 })
+            .limit(10);
+        res.status(200).json({ success: true, data: transactions });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 module.exports = {
     registerUser,
     authUser,
     logoutUser,
-    getUserProfile
+    getUserProfile,
+    topUpWallet,
+    getMyTransactions
 };

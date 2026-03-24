@@ -1,18 +1,51 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
+import api from '../api/axios';
+import { toast } from 'react-toastify';
 import { 
   LogOut, LayoutDashboard, User, ShieldCheck, 
   MapPin, IdCard, Mail, Phone, Fingerprint,
   Award, Star, Shield, Settings, ChevronRight,
-  AlertTriangle, History, Zap, Ban
+  AlertTriangle, History, Zap, Ban, Wallet, CreditCard, ArrowUpRight,
+  DollarSign, IndianRupee, Eye, EyeOff, RefreshCw, AlertCircle
 } from 'lucide-react';
 
 import Navbar from '../components/Navbar';
+import AddMoneyModal from '../components/AddMoneyModal';
+import WithdrawMoneyModal from '../components/WithdrawMoneyModal';
 
 const Profile = () => {
-  const { user, logout } = useAuth();
+  const { user, refreshUser } = useAuth(); // assume refreshed user data needs to be pulled
+  const [showTopUp, setShowTopUp] = useState(false);
+  const [showWithdraw, setShowWithdraw] = useState(false);
+  const [showBalance, setShowBalance] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [transactions, setTransactions] = useState([]);
+  const [balance, setBalance] = useState(user?.walletBalance || 0);
+
+  const fetchWalletData = async () => {
+     try {
+        const { data } = await api.get('/payments/wallet/statement');
+        if (data.success) {
+           setTransactions(data.transactions);
+           setBalance(data.balance);
+        }
+     } catch (error) {
+        console.error('Failed to fetch wallet status');
+     }
+  };
+
+  useEffect(() => {
+     fetchWalletData();
+  }, []);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchWalletData();
+    setTimeout(() => setIsRefreshing(false), 800);
+  };
 
   const getTrustScoreInfo = (score) => {
     if (score >= 90) return { color: 'text-emerald-600 bg-emerald-50 border-emerald-100', label: 'Highly Reliable' };
@@ -78,27 +111,130 @@ const Profile = () => {
                         <Settings size={18} className="group-hover:rotate-90 transition-transform duration-500" />
                         Edit Profile
                      </button>
+                     {user?.role === 'admin' && (
+                         <Link 
+                           to="/admin"
+                           className="px-8 py-4 bg-slate-900 text-white rounded-[1.5rem] font-black text-sm uppercase tracking-widest hover:scale-105 transition-transform shadow-xl flex items-center gap-3 group"
+                         >
+                            <LayoutDashboard size={18} />
+                            Admin Console
+                         </Link>
+                      )}
                   </div>
                </div>
 
-               {/* Stats Grid */}
-               <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-16">
-                  {stats.map((stat, i) => (
-                     <motion.div 
-                       key={i}
-                       initial={{ opacity: 0, y: 20 }}
-                       animate={{ opacity: 1, y: 0 }}
-                       transition={{ delay: i * 0.1 }}
-                       className="bg-slate-50/50 p-6 rounded-[2.5rem] border border-slate-100 text-center hover:bg-white hover:shadow-xl hover:shadow-indigo-50 transition-all group"
-                     >
-                        <div className={`${stat.bg} ${stat.color} h-12 w-12 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform`}>
-                           <stat.icon size={24} />
-                        </div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{stat.label}</p>
-                        <p className="text-2xl font-black text-slate-800 tracking-tighter italic">{stat.value}</p>
-                     </motion.div>
-                  ))}
-               </div>
+                {/* Wallet & Stats — JUSTICE ECONOMY */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-16">
+                   {/* Main Wallet Card */}
+                   <motion.div 
+                     whileHover={{ y: -8, scale: 1.01 }}
+                     whileTap={{ scale: 0.98 }}
+                     initial={{ opacity: 0, scale: 0.95 }}
+                     animate={{ opacity: 1, scale: 1 }}
+                     className="lg:col-span-1 bg-slate-900 rounded-[3rem] p-8 text-white relative overflow-hidden shadow-2xl shadow-indigo-200 group cursor-default"
+                   >
+                      <div className={`absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-indigo-400/30 transition-all duration-700 ${isRefreshing ? 'animate-pulse scale-150' : ''}`}></div>
+                      
+                      <div className="relative z-10 flex flex-col h-full justify-between">
+                         <div>
+                            <div className="flex items-center justify-between mb-8">
+                               <div className="h-12 w-12 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-md border border-white/10">
+                                  <Wallet size={24} className="text-indigo-400" />
+                               </div>
+                               <div className="flex gap-2">
+                                  <button 
+                                    onClick={() => setShowBalance(!showBalance)}
+                                    className="h-10 w-10 bg-white/5 hover:bg-white/10 rounded-xl flex items-center justify-center transition-colors text-white/40 hover:text-white"
+                                  >
+                                     {showBalance ? <Eye size={18} /> : <EyeOff size={18} />}
+                                  </button>
+                                  <button 
+                                    onClick={handleRefresh}
+                                    className={`h-10 w-10 bg-white/5 hover:bg-white/10 rounded-xl flex items-center justify-center transition-colors text-white/40 hover:text-white ${isRefreshing ? 'animate-spin' : ''}`}
+                                  >
+                                     <RefreshCw size={18} />
+                                  </button>
+                               </div>
+                            </div>
+                            <p className="text-[10px] font-black text-indigo-300 uppercase tracking-widest mb-1">Available Funds</p>
+                            <h2 className={`text-5xl font-black tracking-tighter italic flex items-start ${balance < 0 ? 'text-rose-500' : ''}`}>
+                               <span className={`text-2xl mt-1.5 mr-1 not-italic opacity-50 ${balance < 0 ? 'text-rose-400' : ''}`}>₹</span>
+                               {showBalance ? balance : '••••••'}
+                            </h2>
+                            {balance < 0 && (
+                               <div className="flex items-center gap-2 mt-2 text-rose-400">
+                                  <AlertTriangle size={12} />
+                                  <span className="text-[9px] font-black uppercase tracking-widest">Clear Negative Balance</span>
+                               </div>
+                            )}
+                         </div>
+
+                         {/* Mini Ledger Peek — Interactive bit */}
+                         <div className="flex-1 my-6 space-y-3 opacity-80 group-hover:opacity-100 transition-opacity">
+                            <div className="flex items-center justify-between">
+                               <p className="text-[9px] font-black uppercase tracking-widest text-indigo-400/60">Recent Activity</p>
+                               <Link to="/wallet-history" className="text-[9px] font-black uppercase tracking-widest text-indigo-400 hover:text-white transition-colors">View All</Link>
+                            </div>
+                            {transactions.length > 0 ? (
+                               transactions.slice(0, 2).map((t, idx) => (
+                                  <div key={idx} className="flex items-center justify-between text-[11px] font-bold">
+                                     <span className="text-white/60 truncate mr-4 italic">"{t.description}"</span>
+                                     <span className={t.amount > 0 ? 'text-emerald-400' : 'text-rose-400'}>
+                                        {t.amount > 0 ? '+' : ''}{t.amount}
+                                     </span>
+                                  </div>
+                               ))
+                            ) : (
+                               <p className="text-[10px] italic text-white/30">No recent transactions</p>
+                            )}
+                         </div>
+                         
+                         <div className="mt-4 flex flex-col gap-3">
+                            <div className="flex gap-3">
+                               <button 
+                                 onClick={() => setShowTopUp(true)}
+                                 className={`flex-1 ${balance < 0 ? 'bg-rose-600 hover:bg-rose-700' : 'bg-indigo-600 hover:bg-white hover:text-indigo-600'} text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2`}
+                               >
+                                  <CreditCard size={14} /> Add Money
+                               </button>
+                               <Link 
+                                  to="/wallet-history"
+                                  className="h-12 w-12 bg-white/10 hover:bg-white/20 rounded-2xl flex items-center justify-center transition-colors text-indigo-300 group/arrow shrink-0"
+                               >
+                                  <ArrowUpRight size={18} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                               </Link>
+                            </div>
+                            <button 
+                              onClick={() => setShowWithdraw(true)}
+                              className="w-full bg-slate-900/50 hover:bg-rose-600 border border-white/10 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-2"
+                            >
+                               <ArrowUpRight size={14} className="rotate-180" /> Request Withdrawal
+                            </button>
+                         </div>
+                      </div>
+                   </motion.div>
+
+                   {/* Stats Area */}
+                   <div className="lg:col-span-2 grid grid-cols-2 gap-6">
+                      {stats.map((stat, i) => (
+                         <motion.div 
+                           key={i}
+                           initial={{ opacity: 0, y: 20 }}
+                           animate={{ opacity: 1, y: 0 }}
+                           transition={{ delay: i * 0.1 }}
+                           className="bg-white p-8 rounded-[2.5rem] border border-slate-100 flex flex-col justify-between hover:shadow-xl hover:shadow-indigo-50 transition-all group"
+                         >
+                            <div className={`${stat.bg} ${stat.color} h-12 w-12 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
+                               <stat.icon size={22} />
+                            </div>
+                            <div>
+                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{stat.label}</p>
+                               <p className="text-2xl font-black text-slate-800 tracking-tighter italic">{stat.value}</p>
+                            </div>
+                         </motion.div>
+                      ))}
+                   </div>
+                </div>
 
                 {/* Priority Status — Justice Reward */}
                 {user?.priorityBadgeExpires && new Date(user.priorityBadgeExpires) > new Date() && (
@@ -283,6 +419,27 @@ const Profile = () => {
             </div>
          </motion.div>
       </main>
+
+      {/* Add Money Modal — STRIPE INTEGRATION */}
+      <AddMoneyModal 
+        show={showTopUp} 
+        onClose={() => setShowTopUp(false)} 
+        onSuccess={async () => {
+           setShowTopUp(false);
+           await refreshUser(); 
+           await fetchWalletData();
+        }}
+      />
+      
+      <WithdrawMoneyModal 
+        show={showWithdraw} 
+        onClose={() => setShowWithdraw(false)} 
+        balance={balance}
+        onSuccess={async () => {
+           await refreshUser();
+           await fetchWalletData();
+        }}
+      />
     </div>
   );
 };

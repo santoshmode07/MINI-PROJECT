@@ -2,6 +2,7 @@ const Ride = require('../models/Ride');
 const User = require('../models/User');
 const Review = require('../models/Review');
 const Notification = require('../models/Notification');
+const Transaction = require('../models/Transaction');
 const { haversineDistance, calculatePartialFare } = require('../utils/fareHelper');
 
 // @desc    Complete a ride (Driver only)
@@ -19,26 +20,189 @@ exports.completeRide = async (req, res) => {
     if (ride.status === 'completed') return res.status(400).json({ success: false, message: 'Ride already completed' });
     if (ride.status === 'cancelled') return res.status(400).json({ success: false, message: 'Cannot complete a cancelled ride' });
 
+    // JUSTICE SYSTEM CHECK: If majority reported No-Show, driver is blocked from completing
+    const confirmedCount = ride.bookings.filter(b => b.status === 'confirmed').length;
+    if (confirmedCount > 0 && ride.noShowReports.length > confirmedCount / 2) {
+       return res.status(403).json({ 
+         success: false, 
+         message: 'Critical: The majority of confirmed passengers reported your absence at the pickup point. You are blocked from completing this ride, and your account has been flagged.' 
+       });
+    }
+
+    // Departure Time Validation: Cannot complete ride before it even starts
+    // Construct local departure time matching the creation logic in offerRide
+    const dateStr = ride.date.toISOString().split('T')[0];
+    const departureDate = new Date(`${dateStr}T${ride.time}`);
+    const now = new Date();
+    
+    if (now < new Date(departureDate.getTime() - 5 * 60 * 1000)) {
+       return res.status(400).json({ 
+         success: false, 
+         message: `Safety Protocol: You cannot mark the journey as completed before the departure time (${ride.time}).` 
+       });
+    }
+
+    // 1. UPDATE RIDE STATUS
     ride.status = 'completed';
     await ride.save();
 
-    // Use the already-attached req.user from authMiddleware to save a DB call
+    // 2. ESCROW DISTRIBUTION: Release funds to Rider and Platform
+    const confirmedBookings = ride.bookings.filter(b => b.status === 'confirmed');
+    const admin = await User.findOne({ role: 'admin' });
+    let totalRiderBalanceChange = 0;
+    let totalAdminBalanceChange = 0;
+    const transactions = [];
+
+    for (const booking of confirmedBookings) {
+      const riderCut = booking.totalDriverEarnings; // 80% of original fare
+      const originalFare = Math.round(riderCut / 0.8);
+      const commission = Math.round(originalFare * 0.2); // Platform's gross cut
+      const subsidy = originalFare - (booking.fareCharged || 0); // Amount paid by system (if any)
+
+      if (booking.paymentMethod === 'online') {
+          // Admin already holds total fare from ESCROW_HOLD during booking
+          totalRiderBalanceChange += riderCut;
+          totalAdminBalanceChange -= riderCut;
+
+          // Transactions for audit trail
+          transactions.push({
+            userId: req.user._id,
+            type: 'RIDE_EARNING',
+            amount: riderCut,
+            rideId: ride._id,
+            description: `Ride Earnings (Online) - ${ride.to}`
+          });
+
+          if (admin) {
+             // 1. Release the full held amount from escrow visibility
+             transactions.push({
+               userId: admin._id,
+               type: 'ESCROW_RELEASE',
+               amount: -booking.fareCharged,
+               rideId: ride._id,
+               description: `Escrow Released: Ride to ${ride.to}`
+             });
+             // 2. Recognize Gross Commission
+             transactions.push({
+               userId: admin._id,
+               type: 'COMMISSION',
+               amount: commission,
+               rideId: ride._id,
+               description: `Platform Gross Commission - Ride ${ride._id}`
+             });
+             // 3. Recognize Subsidy Expense (if applicable)
+             if (subsidy > 0) {
+                transactions.push({
+                  userId: admin._id,
+                  type: 'SUBSIDY',
+                  amount: -subsidy,
+                  rideId: ride._id,
+                  description: `Justice Subsidy - Ride ${ride._id}`
+                });
+             }
+          }
+      } else {
+          // CASH PAYMENT: Rider has full cash, they owe netCommission (commission - subsidy)
+          const netCommission = commission - subsidy;
+          totalRiderBalanceChange -= netCommission; 
+          totalAdminBalanceChange += netCommission;
+
+          // Driver's account is adjusted for the platform's cut
+          transactions.push({
+            userId: req.user._id,
+            type: 'COMMISSION',
+            amount: -netCommission,
+            rideId: ride._id,
+            description: `Platform Commission Share - Ride ${ride._id}`
+          });
+
+          if (admin) {
+            // Admin sees the breakdown
+            transactions.push({
+               userId: admin._id,
+               type: 'COMMISSION',
+               amount: commission,
+               rideId: ride._id,
+               description: `Platform Gross Commission (Cash) - Ride ${ride._id}`
+            });
+            if (subsidy > 0) {
+               transactions.push({
+                 userId: admin._id,
+                 type: 'SUBSIDY',
+                 amount: -subsidy,
+                 rideId: ride._id,
+                 description: `Justice Subsidy (Cash Ride) - Ride ${ride._id}`
+               });
+            }
+          }
+      }
+    }
+
+    // Update Rider (Driver) Wallet & Stats
+    req.user.walletBalance += totalRiderBalanceChange;
     req.user.totalCompletedRides += 1;
-    // Raise Cap to 200 for 'Elite' Status
     req.user.trustScore = Math.min(200, req.user.trustScore + 5); 
     
     // Streak bonus: every 10 rides completion
     if (req.user.totalCompletedRides > 0 && req.user.totalCompletedRides % 10 === 0) {
        req.user.trustScore = Math.min(200, req.user.trustScore + 10);
-       console.log(`[Trust] 🎖️ STREAK BONUS: Driver ${req.user._id} completed 10th ride.`);
     }
     
     await req.user.save();
 
+    // Update Admin Wallet
+    if (admin && totalAdminBalanceChange !== 0) {
+       admin.walletBalance += totalAdminBalanceChange;
+       await admin.save();
+    }
+
+    // 3. RECORD TRANSACTIONS
+    if (transactions.length > 0) {
+       await Transaction.insertMany(transactions);
+       console.log(`[Escrow] 💵 Final Balance Adjustment: Rider ₹${totalRiderBalanceChange}, Admin ₹${totalAdminBalanceChange}`);
+    }
+
+    // 4. NOTIFY PASSENGERS: Prompt for feedback
+    const notifications = ride.bookings
+      .filter(b => b.status === 'confirmed')
+      .map(b => ({
+        user: b.passenger,
+        type: 'FEEDBACK_REQUEST',
+        title: 'Journey Finished! ⭐',
+        message: `How was your ride with ${req.user.name}? Share your feedback to help the community.`,
+        rideId: ride._id
+      }));
+    
+    if (notifications.length > 0) {
+      await Notification.insertMany(notifications);
+      console.log(`[RideComplete] 🔔 Feedback requests sent to ${notifications.length} passengers.`);
+    }
+
     console.log(`[RideComplete] ✅ Ride ${ride._id} completed by ${req.user._id}. Trust Score: ${req.user.trustScore}`);
 
-    res.status(200).json({ success: true, message: 'Ride marked as completed. Trust Score increased!', trustScore: req.user.trustScore });
+    // 5. NOTIFY DRIVER (Self) about earnings/commissions
+    let completionMessage = 'Ride marked as completed. Earnings released to wallet!';
+    if (totalRiderEarnings < 0) {
+      completionMessage = `Ride completed! ₹${Math.abs(totalRiderEarnings)} commission deducted for cash journeys.`;
+      
+      await Notification.create({
+        user: req.user._id,
+        type: 'COMMISSION_DEDUCTED',
+        title: 'Settlement Notice 💳',
+        message: `₹${Math.abs(totalRiderEarnings)} deducted for your cash ride to ${ride.to}. Please ensure you collected ₹${confirmedBookings.reduce((sum, b) => sum + (b.paymentMethod === 'cash' ? (b.totalDriverEarnings / 0.8) : 0), 0)} from passengers.`,
+        rideId: ride._id
+      });
+    }
+
+    res.status(200).json({ 
+      success: true, 
+      message: completionMessage, 
+      trustScore: req.user.trustScore,
+      earned: totalRiderEarnings
+    });
+
   } catch (error) {
+    console.error(`[CompleteError] 💥: ${error.message}`);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -94,9 +258,14 @@ const getCoordsFromText = async (address) => {
   return null;
 };
 
+// Import OTP utils
+const { generateOTP } = require('../utils/otpHelper');
+
 // EDGE CASE 4: Background OSRM Retry Job
 exports.startCronJobs = () => {
   console.log(`[Cron] 🕒 Initializing search hardening background tasks...`);
+  
+  // OSRM Recovery Job
   setInterval(async () => {
     try {
       const pendingRides = await Ride.find({ 
@@ -118,9 +287,102 @@ exports.startCronJobs = () => {
         }
       }
     } catch (err) {
-      console.error(`[Cron] Error: ${err.message}`);
+      console.error(`[Cron-OSRM] Error: ${err.message}`);
     }
   }, 5 * 60 * 1000); // Every 5 minutes
+
+  // PART 3: OTP Generation Logic
+  const generateOTPs = async () => {
+    try {
+      const now = new Date();
+      const ridesToProcess = await Ride.find({
+        status: { $in: ['available', 'full'] },
+        'bookings': {
+          $elemMatch: {
+            status: 'confirmed',
+            otp: null
+          }
+        }
+      });
+
+      for (const ride of ridesToProcess) {
+          const dateStr = ride.date.toISOString().split('T')[0];
+          const departureTime = new Date(`${dateStr}T${ride.time}`);
+          const diffMinutes = (departureTime - now) / 60000;
+          
+          if (diffMinutes <= 5.5 && diffMinutes >= -15) {
+              let changed = false;
+              for (const booking of ride.bookings) {
+                  if (booking.status === 'confirmed' && !booking.otp) {
+                      booking.otp = generateOTP();
+                      booking.otpGeneratedAt = now;
+                      booking.boardingStatus = 'pending';
+                      changed = true;
+                      
+                      await Notification.create({
+                          user: booking.passenger,
+                          type: 'OTP_READY',
+                          title: '🔐 Your boarding OTP is ready!',
+                          message: `Open My Bookings to view it. Valid from now until boarding closes.`,
+                          rideId: ride._id
+                      });
+                  }
+              }
+              if (changed) {
+                  ride.markArrivedAvailableAt = new Date(departureTime.getTime() + 2 * 60 * 1000);
+                  ride.markModified('bookings');
+                  await ride.save();
+                  console.log(`[Cron-OTP] 🔐 Generated OTPs for Ride ${ride._id}`);
+              }
+          }
+      }
+    } catch (err) {
+      console.error(`[Cron-OTP] Error: ${err.message}`);
+    }
+  };
+
+  // PART 6: Automatic Refund Logic
+  const processAutoRefunds = async () => {
+    try {
+      const now = new Date();
+      const expiredRides = await Ride.find({
+          status: { $in: ['available', 'full'] },
+          markArrivedAvailableAt: { $lt: now },
+          journeyStartedAt: null
+      });
+
+      if (expiredRides.length === 0) return;
+
+      const admin = await User.findOne({ role: 'admin' });
+      const { processMoneyRelease } = require('./otpController');
+
+      for (const ride of expiredRides) {
+          let processedCount = 0;
+          for (const booking of ride.bookings) {
+              if (booking.status === 'confirmed' && booking.boardingStatus === 'pending') {
+                  booking.boardingStatus = 'not_arrived';
+                  await processMoneyRelease(booking, ride, admin);
+                  processedCount++;
+              }
+          }
+          if (processedCount > 0) {
+              ride.markModified('bookings');
+              await ride.save();
+              console.log(`[Cron-Refund] 🔄 Processed ${processedCount} auto-refunds for Ride ${ride._id}`);
+          }
+      }
+    } catch (err) {
+      console.error(`[Cron-Refund] Error: ${err.message}`);
+    }
+  };
+
+  // Run immediately on boot
+  generateOTPs();
+  processAutoRefunds();
+
+  // Set intervals
+  setInterval(generateOTPs, 45 * 1000);
+  setInterval(processAutoRefunds, 60 * 1000);
 };
 
 // Helper: Get route from OSRM (completely free, no API key)
@@ -497,8 +759,27 @@ exports.getAllRides = async (req, res) => {
       // 3. REAL BENEFIT: Priority Match (Identifying top 10% of drivers)
       const isPriorityMatch = isPriorityUser && (ride.driver?.trustScore >= 90);
 
+      const rideObj = ride.toObject();
+
+      // Mask driver sensitive info
+      if (rideObj.driver) {
+          delete rideObj.driver.phone;
+          delete rideObj.driver.licenseNumber;
+          delete rideObj.driver.aadhaarNumber;
+      }
+
+      // REDACT PASSENGER DETAILS: Browsing searchers should see NO sensitive passenger info
+      rideObj.bookings = (rideObj.bookings || []).map(booking => {
+          return {
+              _id: booking._id,
+              status: booking.status,
+              // We don't populate passenger in search results, but we MUST remove points
+              // boardingPoint & dropoffPoint & fareCharged are EXCLUDED
+          };
+      });
+
       return {
-        ...ride.toObject(),
+        ...rideObj,
         passengerBreakdown: breakdown,
         bookingDetails: {
           totalBooked: confirmed.length,
@@ -594,10 +875,49 @@ exports.getRideById = async (req, res) => {
     }
     const isPriorityMatch = isPriorityUser && (ride.driver?.trustScore >= 90);
 
+    // --- PRIVACY PROTECTION LAYER ---
+    const isDriver = ride.driver._id.toString() === req.user._id.toString();
+    
+    // Convert to plain object to modify
+    const rideObj = ride.toObject();
+
+    // Redact driver sensitive info for non-drivers
+    if (!isDriver) {
+        if (rideObj.driver) {
+            delete rideObj.driver.phone;
+            delete rideObj.driver.licenseNumber;
+            // Aadhaar is already masked at the string level above if present
+        }
+    }
+
+    // REDACT PASSENGER DETAILS for anyone who is NOT the driver
+    rideObj.bookings = (rideObj.bookings || []).map(booking => {
+        const isSelf = booking.passenger && booking.passenger._id.toString() === req.user._id.toString();
+        
+        // If not the driver and not the person who made the booking, redact almost everything
+        if (!isDriver && !isSelf) {
+            return {
+                _id: booking._id,
+                status: booking.status,
+                passenger: {
+                    _id: booking.passenger?._id,
+                    name: booking.passenger?.name ? booking.passenger.name.split(' ')[0] : "Co-Rider",
+                    avatar: booking.passenger?.avatar,
+                    profilePhoto: booking.passenger?.profilePhoto,
+                    gender: booking.passenger?.gender,
+                    averageRating: booking.passenger?.averageRating,
+                    isVerified: booking.passenger?.isVerified
+                }
+                // boardingPoint & dropoffPoint & phone are EXCLUDED
+            };
+        }
+        return booking; // Driver gets full info, Passenger gets their own full info
+    });
+
     return res.status(200).json({ 
       success: true, 
       data: {
-        ...ride.toObject(),
+        ...rideObj,
         passengerBreakdown: breakdown,
         driverReviews: reviews,
         dynamicFare,
@@ -797,24 +1117,39 @@ exports.cancelRide = async (req, res) => {
 
     await ride.save();
 
-    // Give Priority Badges and Notify Passengers
+    // Give Priority Badges, Handle Refunds and Notify Passengers
     await Promise.all(ride.bookings.map(async (b) => {
       if (b.status === 'confirmed' || b.wasAffected) {
-        if (b.priorityBadgeGiven) {
-          const passUser = await User.findById(b.passenger);
-          if (passUser) {
-            passUser.priorityBadgeExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-            await passUser.save();
-            
-            await Notification.create({
-              user: b.passenger,
-              type: 'PRIORITY_BADGE',
-              title: '🎖️ Priority Badge Awarded!',
-              message: 'Due to a late cancellation by your rider, you have been awarded a 7-day priority search badge.',
-              rideId: ride._id
-            });
-          }
+        let passUser = await User.findById(b.passenger);
+        if (!passUser) return;
+
+        // ESCROW REFUND: Give money back if it was online or wallet
+        if ((b.paymentMethod === 'online' || b.paymentMethod === 'wallet') && b.status === 'cancelled') {
+           passUser.walletBalance += b.fareCharged;
+           
+           await Transaction.create({
+             userId: b.passenger,
+             type: 'REFUND',
+             amount: b.fareCharged,
+             rideId: ride._id,
+             description: `System Refund: Ride cancelled by driver`
+           });
+           console.log(`[Escrow] 🔄 Auto-Refunded ₹${b.fareCharged} to Passenger ${passUser.name} via ${b.paymentMethod}`);
         }
+
+        if (b.priorityBadgeGiven) {
+           passUser.priorityBadgeExpires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+           
+           await Notification.create({
+             user: b.passenger,
+             type: 'PRIORITY_BADGE',
+             title: '🎖️ Priority Badge Awarded!',
+             message: 'Due to a late cancellation by your rider, you have been awarded a 7-day priority search badge.',
+             rideId: ride._id
+           });
+        }
+
+        await passUser.save();
 
         await Notification.create({
           user: b.passenger,
@@ -891,8 +1226,8 @@ exports.reportNoShow = async (req, res) => {
     const departureTime = new Date(`${ride.date.toISOString().split('T')[0]}T${ride.time}`);
     const diffMinutes = (now - departureTime) / (1000 * 60);
 
-    if (diffMinutes < 0) return res.status(400).json({ success: false, message: 'Departure time has not passed yet' });
-    if (diffMinutes > 30) return res.status(400).json({ success: false, message: 'No show reporting window (30 min) has closed' });
+    if (diffMinutes < 15) return res.status(400).json({ success: false, message: 'You must wait at least 15 minutes after scheduled departure before reporting a no-show.' });
+    if (diffMinutes > 45) return res.status(400).json({ success: false, message: 'No show reporting window (45 min) has closed.' });
 
     // Check if passenger booked this ride
     const booking = ride.bookings.find(b => b.passenger.toString() === req.user._id.toString() && b.status === 'confirmed');
@@ -920,10 +1255,20 @@ exports.reportNoShow = async (req, res) => {
        
        // Restriction for no-show strike (Scenario 4)
        const restrictionHours = 48; 
-       rider.restrictedUntil = new Date(now.getTime() + restrictionHours * 60 * 60 * 1000);
+       const restrictedUntil = new Date(now.getTime() + restrictionHours * 60 * 60 * 1000);
+       rider.restrictedUntil = restrictedUntil;
        await rider.save();
 
        console.log(`[NoShow] 🛑 PENALTY TRIGGERED for ${ride.driver}. Strike added. Restricted for 48h.`);
+
+       // Notify Raider - CLEAR EXPLANATION
+       await Notification.create({
+         user: ride.driver,
+         type: 'ACCOUNT_RESTRICTED',
+         title: '🚫 Account Restricted: No-Show Reported',
+         message: `Your account has been restricted until ${restrictedUntil.toLocaleString()} because a majority of passengers on your ride from ${ride.from} reported that you did not show up at the starting point.`,
+         rideId: ride._id
+       });
 
        // Notify passengers
        const notifications = ride.bookings

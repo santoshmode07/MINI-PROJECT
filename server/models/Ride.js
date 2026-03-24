@@ -144,7 +144,7 @@ const rideSchema = new mongoose.Schema({
     },
     paymentMethod: {
       type: String,
-      enum: ['cash', 'online'],
+      enum: ['cash', 'online', 'wallet'],
       default: 'cash'
     },
     bookedAt: {
@@ -162,8 +162,26 @@ const rideSchema = new mongoose.Schema({
     alternativesShown: {
       type: Boolean,
       default: false
-    }
+    },
+    // OTP Fields - NEW
+    otp: { type: String, default: null },
+    otpVerified: { type: Boolean, default: false },
+    otpVerifiedAt: { type: Date, default: null },
+    otpGeneratedAt: { type: Date, default: null },
+    otpAttempts: { type: Number, default: 0 },
+    otpLocked: { type: Boolean, default: false },
+    boardingStatus: {
+      type: String,
+      enum: ['arrived', 'not_arrived', 'pending'],
+      default: 'pending'
+    },
+    moneyReleased: { type: Boolean, default: false },
+    refundProcessed: { type: Boolean, default: false }
   }],
+  boardingStartedAt: { type: Date, default: null },
+  journeyStartedAt: { type: Date, default: null },
+  markedArrivedAt: { type: Date, default: null },
+  markArrivedAvailableAt: { type: Date },
   cancellationReason: {
     type: String
   },
