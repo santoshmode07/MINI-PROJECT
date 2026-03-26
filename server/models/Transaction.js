@@ -36,5 +36,9 @@ const transactionSchema = new mongoose.Schema({
     timestamps: true
 });
 
+// Indexes for fast history and lookups
+transactionSchema.index({ userId: 1 });
+transactionSchema.index({ userId: 1, createdAt: -1 });
+
 const Transaction = mongoose.model('Transaction', transactionSchema);
 module.exports = Transaction;

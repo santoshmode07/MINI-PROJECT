@@ -19,7 +19,7 @@ const userSchema = new mongoose.Schema({
     gender: {
         type: String,
         required: [true, 'Please specify gender'],
-        enum: ['male', 'female']
+        enum: ['male', 'female', 'other']
     },
     password: {
         type: String,
@@ -128,6 +128,11 @@ const userSchema = new mongoose.Schema({
 }, {
     timestamps: true
 });
+
+// Optimization Indexes
+userSchema.index({ gender: 1 });
+userSchema.index({ isVerified: 1 });
+userSchema.index({ trustScore: -1 });
 
 // Encrypt password using bcrypt
 userSchema.pre('save', async function () {

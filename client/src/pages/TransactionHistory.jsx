@@ -18,6 +18,8 @@ const TransactionHistory = () => {
   const [transactions, setTransactions] = useState([]);
   const [filter, setFilter] = useState('All');
   const [showTopUp, setShowTopUp] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
 
   const fetchStatement = async () => {
     try {
@@ -39,22 +41,49 @@ const TransactionHistory = () => {
     fetchStatement();
   }, []);
 
+  // Reset pagination on filter change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter]);
+
   const getTransactionIcon = (type) => {
     switch (type) {
-      case 'Money Added': return { icon: CreditCard, color: 'text-emerald-500', bg: 'bg-emerald-50' };
-      case 'Ride Payment': return { icon: ShoppingBag, color: 'text-indigo-500', bg: 'bg-indigo-50' };
-      case 'Commission': return { icon: Activity, color: 'text-amber-500', bg: 'bg-amber-50' };
-      case 'Refund': return { icon: RefreshCw, color: 'text-purple-500', bg: 'bg-purple-50' };
-      default: return { icon: IndianRupee, color: 'text-slate-500', bg: 'bg-slate-50' };
+      case 'MONEY_ADDED': 
+      case 'Money Added': return { icon: CreditCard, color: 'text-emerald-500', bg: 'bg-emerald-50', label: 'Balance Top-up' };
+      case 'RIDE_PAYMENT':
+      case 'Ride Payment': return { icon: ShoppingBag, color: 'text-indigo-500', bg: 'bg-indigo-50', label: 'Ride Payment' };
+      case 'COMMISSION':
+      case 'Commission': return { icon: Activity, color: 'text-amber-500', bg: 'bg-amber-50', label: 'System Fee' };
+      case 'REFUND':
+      case 'Refund': return { icon: RefreshCw, color: 'text-purple-500', bg: 'bg-purple-50', label: 'Ride Refund' };
+      case 'RIDE_EARNING': return { icon: IndianRupee, color: 'text-emerald-600', bg: 'bg-emerald-50', label: 'Ride Earning' };
+      default: return { icon: IndianRupee, color: 'text-slate-500', bg: 'bg-slate-50', label: (type || 'SYNC').replace('_', ' ') };
     }
   };
 
   const filteredTransactions = transactions.filter(t => {
     if (filter === 'All') return true;
+    if (filter === 'FEES') return t.type === 'COMMISSION' || t.type === 'Commission';
+    if (filter === 'BOOKINGS') return t.type === 'RIDE_PAYMENT' || t.type === 'Ride Payment';
+    if (filter === 'EARNINGS') return t.type === 'RIDE_EARNING';
+    if (filter === 'REFUNDS') return t.type === 'REFUND' || t.type === 'Refund';
     return t.type === filter;
   });
 
-  const filterBtns = ['All', 'Money Added', 'Ride Payment', 'Commission', 'Refund'];
+  // Pagination Math
+  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
+  const paginatedTransactions = filteredTransactions.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  const filterBtns = [
+    { id: 'All', label: 'Everything' },
+    { id: 'FEES', label: 'Fees' },
+    { id: 'BOOKINGS', label: 'Bookings' },
+    { id: 'EARNINGS', label: 'Earnings' },
+    { id: 'REFUNDS', label: 'Refunds' }
+  ];
 
   if (loading) return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
@@ -77,7 +106,7 @@ const TransactionHistory = () => {
                  </div>
                  <h1 className="text-4xl font-black text-slate-900 tracking-tighter italic uppercase">Transaction <span className="text-indigo-600">Ledger</span></h1>
               </div>
-              <p className="text-slate-500 font-medium italic underline underline-offset-4 decoration-indigo-100 italic transition-all decoration-2">Complete audit trail of your digital wallet activities.</p>
+              <p className="text-slate-500 font-medium italic underline underline-offset-4 decoration-indigo-200 decoration-2 italic transition-all">Audit trail of your verified digital activities.</p>
            </div>
 
            <motion.div 
@@ -106,33 +135,33 @@ const TransactionHistory = () => {
            </motion.div>
         </div>
 
-        {/* Filter Controls */}
-        <div className="flex flex-wrap items-center gap-3 mb-10 pb-4 border-b border-slate-100 overflow-x-auto scroller-hidden">
+        {/* Filter Controls (SIMPLIFIED) */}
+        <div className="flex flex-wrap items-center gap-4 mb-10 pb-4 border-b border-slate-100 scroller-hidden">
            {filterBtns.map(btn => (
               <button
-                key={btn}
-                onClick={() => setFilter(btn)}
-                className={`flex-shrink-0 px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all
-                  ${filter === btn ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'bg-white text-slate-400 border border-slate-100 hover:border-indigo-200 hover:text-indigo-600'}`}
+                key={btn.id}
+                onClick={() => setFilter(btn.id)}
+                className={`px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.1em] transition-all
+                  ${filter === btn.id ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100 scale-105' : 'bg-white text-slate-400 border border-slate-100 hover:border-indigo-200 hover:text-indigo-600'}`}
               >
-                 {btn}
+                 {btn.label}
               </button>
            ))}
         </div>
 
         {/* Transaction Roster */}
-        <div className="space-y-4">
-           {filteredTransactions.length > 0 ? (
+        <div className="space-y-4 mb-16">
+           {paginatedTransactions.length > 0 ? (
               <AnimatePresence mode="popLayout">
-                {filteredTransactions.map((t, idx) => {
+                {paginatedTransactions.map((t, idx) => {
                   const info = getTransactionIcon(t.type);
                   return (
                     <motion.div
-                      key={t.paymentIntentId || idx}
+                      key={t._id || idx}
                       initial={{ opacity: 0, scale: 0.98, y: 10 }}
                       animate={{ opacity: 1, scale: 1, y: 0 }}
                       exit={{ opacity: 0, scale: 0.95 }}
-                      transition={{ delay: idx * 0.05 }}
+                      transition={{ duration: 0.3 }}
                       className="group bg-white rounded-[2rem] p-6 border border-slate-100 flex items-center gap-6 hover:shadow-2xl hover:shadow-slate-100 hover:border-indigo-100 transition-all cursor-default relative overflow-hidden"
                     >
                        <div className={`${info.bg} ${info.color} h-14 w-14 rounded-2xl flex items-center justify-center shrink-0 shadow-inner group-hover:scale-110 transition-transform`}>
@@ -140,21 +169,19 @@ const TransactionHistory = () => {
                        </div>
 
                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
-                             <h4 className="text-base font-black text-slate-800 tracking-tight italic truncate">"{t.description}"</h4>
-                             <span className={`text-sm font-black italic whitespace-nowrap sm:text-right ${t.amount >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                {t.amount >= 0 ? '+' : ''}₹{Math.abs(t.amount)}
+                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
+                             <div className="flex items-center gap-2">
+                                <h4 className="text-base font-black text-slate-800 tracking-tight italic truncate">"{t.description}"</h4>
+                                <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md border ${info.color} ${info.bg} border-current opacity-70`}>{info.label}</span>
+                             </div>
+                             <span className={`text-lg font-black italic whitespace-nowrap sm:text-right ${t.amount >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                {t.amount >=0 ? '+' : '-'}₹{Math.abs(t.amount)}
                              </span>
                           </div>
                           <div className="flex items-center gap-4 text-xs font-bold text-slate-400 uppercase tracking-widest">
                              <span className="flex items-center gap-1.5"><Calendar size={12} /> {new Date(t.createdAt).toLocaleDateString()}</span>
                              <span className="flex items-center gap-1.5"><Clock size={12} /> {new Date(t.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                             {t.paymentIntentId && <span className="hidden md:flex items-center gap-1.5 text-[9px] opacity-40 italic">#ID:{t.paymentIntentId.slice(-8)}</span>}
                           </div>
-                       </div>
-
-                       <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-12 opacity-0 group-hover:opacity-10 group-hover:translate-x-6 transition-all">
-                          <info.icon size={80} />
                        </div>
                     </motion.div>
                   );
@@ -163,11 +190,37 @@ const TransactionHistory = () => {
            ) : (
               <div className="bg-slate-50 rounded-[3rem] p-24 flex flex-col items-center justify-center text-center opacity-50 border-2 border-dashed border-slate-200">
                  <RefreshCw className="text-slate-300 mb-6 animate-spin-slow" size={60} />
-                 <h3 className="text-2xl font-black text-slate-800 tracking-tight italic mb-2">No Transactions Yet</h3>
-                 <p className="text-slate-500 font-bold uppercase tracking-widest text-xs italic">Time to add some digital fuel to your account!</p>
+                 <h3 className="text-2xl font-black text-slate-800 tracking-tight italic mb-2">Registry Silent</h3>
+                 <p className="text-slate-500 font-bold uppercase tracking-widest text-xs italic">No activity detected within this sector.</p>
               </div>
            )}
         </div>
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+           <div className="flex items-center justify-center gap-6 py-6 border-t border-slate-50">
+             <button 
+               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+               disabled={currentPage === 1}
+               className="h-14 w-14 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-200 disabled:opacity-20 transition-all shadow-xl active:scale-90"
+             >
+                <ChevronRight size={24} className="rotate-180" />
+             </button>
+             
+             <div className="text-center min-w-[120px]">
+                <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1 italic">Ledger Page</p>
+                <p className="text-xl font-black text-slate-800 tracking-tighter italic leading-none">{currentPage} <span className="text-slate-300 mx-1">/</span> {totalPages}</p>
+             </div>
+
+             <button 
+               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+               disabled={currentPage === totalPages}
+               className="h-14 w-14 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-200 disabled:opacity-20 transition-all shadow-xl active:scale-90"
+             >
+                <ChevronRight size={24} />
+             </button>
+           </div>
+        )}
       </main>
 
       <AddMoneyModal 

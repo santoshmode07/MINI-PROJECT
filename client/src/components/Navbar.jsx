@@ -10,14 +10,17 @@ const Navbar = () => {
   const location = useLocation();
   const [showNotifications, setShowNotifications] = useState(false);
 
-  const navLinks = [
+  const navLinks = user?.role === 'admin' ? [
+    { name: 'HQ Dashboard', path: '/admin' },
+    { name: 'Member Registry', path: '/admin/users' },
+    { name: 'Admin Account', path: '/profile' }
+  ] : [
     { name: 'Find Rides', path: '/find-rides' },
     { name: 'Offer Ride', path: '/offer-ride' },
     { name: 'My Rides', path: '/my-rides', badge: driverStats?.newBookingsCount > 0 },
     { name: 'My Bookings', path: '/bookings' },
     { name: 'Wallet', path: '/wallet-history' },
-    { name: 'Profile', path: '/profile' },
-    ...(user?.role === 'admin' ? [{ name: 'Admin', path: '/admin' }] : [])
+    { name: 'Profile', path: '/profile' }
   ];
 
   const isActive = (path) => location.pathname === path;
@@ -29,7 +32,7 @@ const Navbar = () => {
           <div className="bg-indigo-600 p-2 rounded-xl shadow-lg shadow-indigo-200 transform group-hover:rotate-12 transition-transform duration-300">
             <LayoutDashboard className="text-white h-5 w-5" />
           </div>
-          <span className="font-bold text-2xl tracking-tighter text-slate-800">Raid<span className="text-indigo-600">Dosthi</span></span>
+          <span className="font-bold text-2xl tracking-tighter text-slate-800">Ride<span className="text-indigo-600">Dosthi</span></span>
         </Link>
       </div>
 
@@ -125,6 +128,13 @@ const Navbar = () => {
                 </div>
              )}
           </div>
+
+          {user?.priorityBadgeExpires && new Date(user.priorityBadgeExpires) > new Date() && (
+            <div className="hidden sm:flex items-center gap-2 bg-slate-900 border border-slate-700 px-3 py-1.5 rounded-xl text-white shadow-lg shadow-indigo-100 group cursor-help relative hover:bg-slate-800 transition-colors" title={`Priority active until ${new Date(user.priorityBadgeExpires).toLocaleDateString()}`}>
+               <Star fill="#6366f1" size={12} className="text-indigo-400 animate-pulse" />
+               <span className="text-[9px] font-black uppercase tracking-widest italic leading-none">Priority</span>
+            </div>
+          )}
 
           <Link to="/profile" className="hidden sm:flex items-center gap-3 bg-white py-1.5 px-4 rounded-2xl shadow-sm border border-slate-100 hover:border-indigo-200 transition-colors group">
             <div className="h-7 w-7 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold ring-2 ring-indigo-50 group-hover:scale-110 transition-transform">

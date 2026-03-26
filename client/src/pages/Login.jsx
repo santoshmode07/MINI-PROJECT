@@ -57,7 +57,7 @@ const Login = () => {
             <div className="bg-indigo-600 p-3 rounded-2xl shadow-2xl shadow-indigo-500/50 transform group-hover:rotate-12 transition-transform duration-500">
                <LayoutDashboard className="text-white h-6 w-6" />
             </div>
-            <span className="font-bold text-3xl tracking-tighter text-white">Raid<span className="text-indigo-400">Dosthi</span></span>
+            <span className="font-bold text-3xl tracking-tighter text-white">Ride<span className="text-indigo-400">Dosthi</span></span>
           </Link>
           <motion.div
             initial={{ opacity: 0 }}
@@ -142,7 +142,7 @@ const Login = () => {
         </div>
 
         {/* Footer Brand */}
-        <p className="text-center mt-12 text-[10px] font-black text-slate-600 uppercase tracking-[0.4em]">© 2026 RaidDosthi Global Security</p>
+        <p className="text-center mt-12 text-[10px] font-black text-slate-600 uppercase tracking-[0.4em]">© 2026 RideDosthi Global Security</p>
       </motion.div>
     </div>
   );

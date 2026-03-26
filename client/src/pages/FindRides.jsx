@@ -19,7 +19,7 @@ const FindRides = () => {
   const [searchParams, setSearchParams] = useState({ 
     from: '', 
     to: '', 
-    date: '',
+    date: new Date().toISOString().split('T')[0],
     passengerLat: '',
     passengerLng: '',
     destinationLat: '',
@@ -176,7 +176,7 @@ const FindRides = () => {
       <footer className="py-24 px-6 border-t border-slate-200/60 bg-white relative z-10 text-center">
          <div className="max-w-4xl mx-auto mb-16">
             <h3 className="text-2xl md:text-3xl font-black text-slate-800 mb-4 tracking-tight italic">Revolutionizing the way you <span className="text-indigo-600">Commute.</span></h3>
-            <p className="text-slate-500 font-medium text-lg">Join 10,000+ verified professionals from top companies who trust RaidDosthi for their daily journeys.</p>
+            <p className="text-slate-500 font-medium text-lg">Join 10,000+ verified professionals from top companies who trust RideDosthi for their daily journeys.</p>
          </div>
          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-center gap-12 font-black text-slate-800 md:scale-110 text-3xl tracking-[0.4em] italic uppercase opacity-60 hover:opacity-100 transition-all duration-700">
             <span className="hover:text-indigo-600 hover:scale-125 transition-all cursor-default">Microsoft</span>
@@ -186,7 +186,7 @@ const FindRides = () => {
             <span className="hover:text-indigo-600 hover:scale-125 transition-all cursor-default">Amazon</span>
          </div>
          <div className="mt-20 pt-10 border-t border-slate-50 flex flex-col md:flex-row items-center justify-between gap-6 px-10">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">© 2026 RaidDosthi Transit Systems. All Rights Reserved.</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">© 2026 RideDosthi Transit Systems. All Rights Reserved.</p>
             <div className="flex gap-8">
                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600">Privacy Protocol</span>
                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer hover:text-indigo-600">Terms of Service</span>

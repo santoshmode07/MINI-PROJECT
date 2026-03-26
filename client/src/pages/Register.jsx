@@ -91,7 +91,7 @@ const Register = () => {
                 <div className="bg-indigo-600 p-2.5 rounded-xl shadow-2xl shadow-indigo-500/50 transform group-hover:rotate-12 transition-transform duration-500">
                    <LayoutDashboard className="text-white h-5 w-5" />
                 </div>
-                <span className="font-bold text-2xl tracking-tighter text-white">Raid<span className="text-indigo-400">Dosthi</span></span>
+                <span className="font-bold text-2xl tracking-tighter text-white">Ride<span className="text-indigo-400">Dosthi</span></span>
               </Link>
               
               <h2 className="text-5xl font-black text-white leading-[0.9] mb-8 tracking-tighter italic">Join the <br/><span className="text-indigo-400">Transit</span> Revolution.</h2>

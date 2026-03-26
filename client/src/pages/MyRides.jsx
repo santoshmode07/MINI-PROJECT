@@ -10,6 +10,7 @@ import {
 import api from '../api/axios';
 import Navbar from '../components/Navbar';
 import { toast } from 'react-toastify';
+import { useSocket } from '../context/SocketContext';
 import CancellationModal from '../components/CancellationModal';
 
 const MyRides = () => {
@@ -17,6 +18,7 @@ const MyRides = () => {
   const [loading, setLoading] = useState(true);
   const [selectedRideForCancel, setSelectedRideForCancel] = useState(null);
   const [appealInfo, setAppealInfo] = useState(null);
+  const { socket, isConnected } = useSocket();
   const navigate = useNavigate();
 
   const fetchRides = async () => {
@@ -35,6 +37,27 @@ const MyRides = () => {
   useEffect(() => {
     fetchRides();
   }, []);
+
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+
+    const handleSeatUpdate = (data) => {
+      console.log('[Socket] Seat update on MyRides:', data);
+      setRides(prev => prev.map(ride => {
+        if (ride._id === data.rideId) {
+          return {
+            ...ride,
+            seatsRemaining: data.seatsAvailable,
+            totalBooked: data.totalSeats - data.seatsAvailable 
+          };
+        }
+        return ride;
+      }));
+    };
+
+    socket.on('seat_updated', handleSeatUpdate);
+    return () => socket.off('seat_updated', handleSeatUpdate);
+  }, [socket, isConnected]);
 
   const handleCancelIntent = (ride) => {
     setSelectedRideForCancel(ride);

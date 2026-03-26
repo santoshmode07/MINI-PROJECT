@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
@@ -9,21 +9,268 @@ import {
   MapPin, IdCard, Mail, Phone, Fingerprint,
   Award, Star, Shield, Settings, ChevronRight,
   AlertTriangle, History, Zap, Ban, Wallet, CreditCard, ArrowUpRight,
-  DollarSign, IndianRupee, Eye, EyeOff, RefreshCw, AlertCircle
+  DollarSign, IndianRupee, Eye, EyeOff, RefreshCw, AlertCircle, X,
+  Save, Key, UserCircle, Camera, Upload, Clock, Trash2, 
+  MessageSquare, Navigation
 } from 'lucide-react';
 
 import Navbar from '../components/Navbar';
 import AddMoneyModal from '../components/AddMoneyModal';
 import WithdrawMoneyModal from '../components/WithdrawMoneyModal';
 
+const EditProfileModal = ({ show, onClose, user, onUpdate }) => {
+  const [formData, setFormData] = useState({
+    name: user?.name || '',
+    phone: user?.phone || '',
+    gender: user?.gender?.toLowerCase() || '',
+    password: '',
+    profilePhoto: user?.profilePhoto || ''
+  });
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
+
+  // PLACE YOUR IMGBB API KEY HERE OR IN .env AS VITE_IMGBB_API_KEY
+  const IMGBB_API_KEY = "65a6fa2791e0f75b77489cf91b85cdd6"; 
+
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        name: user.name,
+        phone: user.phone || '',
+        gender: user.gender?.toLowerCase() || '',
+        password: '',
+        profilePhoto: user.profilePhoto || ''
+      });
+    }
+  }, [user]);
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      return toast.error('File size must be less than 2MB');
+    }
+
+    setUploading(true);
+    const uploadData = new FormData();
+    uploadData.append('image', file);
+
+    try {
+      const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
+        method: 'POST',
+        body: uploadData
+      });
+      const data = await response.json();
+      
+      if (data.success) {
+        setFormData(prev => ({ ...prev, profilePhoto: data.data.url }));
+        toast.success('Identity Optic Captured');
+      } else {
+        throw new Error(data.error?.message || 'Upload failed');
+      }
+    } catch (error) {
+      console.error('Image Upload Error:', error);
+      toast.error('Identity Optic Upload Failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      // Ensure gender is sent as lowercase to match model enum
+      const submitData = {
+        ...formData,
+        gender: formData.gender.toLowerCase()
+      };
+      
+      const { data } = await api.put('/auth/profile', submitData);
+      if (data.success) {
+        toast.success('Core Profile Synchronized');
+        onUpdate();
+        onClose();
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Platform Synchronization Failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!show) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md"
+        onClick={onClose}
+      >
+        <motion.div 
+          initial={{ scale: 0.9, y: 20 }}
+          animate={{ scale: 1, y: 0 }}
+          exit={{ scale: 0.9, y: 20 }}
+          className="bg-white w-full max-w-lg rounded-[3rem] overflow-hidden shadow-2xl relative max-h-[90vh] flex flex-col"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="p-10 overflow-y-auto custom-scrollbar">
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-3xl font-black text-slate-900 tracking-tighter uppercase italic">HQ <span className="text-indigo-600">Dossier</span></h2>
+              <button 
+                onClick={onClose}
+                className="h-10 w-10 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center hover:bg-rose-50 hover:text-rose-500 transition-all"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Profile Photo Section */}
+            <div className="flex flex-col items-center mb-10">
+               <div className="relative group">
+                  <div className="h-40 w-40 rounded-[2.5rem] overflow-hidden bg-white border-4 border-white shadow-2xl flex items-center justify-center ring-8 ring-slate-50 transition-all duration-700 hover:rotate-3" style={{ isolation: 'isolate' }}>
+                     {formData.profilePhoto ? (
+                        <img 
+                          src={formData.profilePhoto} 
+                          alt="Profile" 
+                          className="h-full w-full object-cover hd-profile rounded-[2.2rem]" 
+                          loading="lazy"
+                          onError={(e) => { e.target.src = 'https://ui-avatars.com/api/?name=' + formData.name + '&background=random'; }}
+                        />
+                     ) : (
+                        <UserCircle size={80} className="text-slate-200" />
+                     )}
+                     {uploading && (
+                        <div className="absolute inset-0 bg-white/70 backdrop-blur-md flex items-center justify-center z-20">
+                           <RefreshCw size={32} className="animate-spin text-indigo-600" />
+                        </div>
+                     )}
+                  </div>
+                  <div className="absolute -bottom-2 -right-2 flex flex-col gap-2">
+                    <button 
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="h-10 w-10 bg-indigo-600 text-white rounded-xl shadow-lg flex items-center justify-center hover:scale-110 active:scale-95 transition-all"
+                    >
+                       <Camera size={18} />
+                    </button>
+                    {formData.profilePhoto && (
+                      <button 
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, profilePhoto: '' }))}
+                        className="h-10 w-10 bg-rose-500 text-white rounded-xl shadow-lg flex items-center justify-center hover:scale-110 active:scale-95 transition-all"
+                      >
+                         <Trash2 size={18} />
+                      </button>
+                    )}
+                  </div>
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    onChange={handleImageUpload} 
+                    className="hidden" 
+                    accept="image/*"
+                  />
+               </div>
+               <p className="mt-4 text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Identity Optic Scan</p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Full Name</label>
+                <div className="relative group">
+                  <UserCircle className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-indigo-600 transition-colors" size={20} />
+                  <input 
+                    type="text" 
+                    value={formData.name}
+                    onChange={e => setFormData({...formData, name: e.target.value})}
+                    placeholder="Enter full name"
+                    className="w-full bg-slate-50 border border-slate-100 py-4 pl-12 pr-4 rounded-2xl text-sm font-bold focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all cursor-text"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Gender Authority</label>
+                  <select 
+                    value={formData.gender}
+                    onChange={e => setFormData({...formData, gender: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-100 py-4 px-6 rounded-2xl text-sm font-bold focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all cursor-pointer"
+                    required
+                  >
+                    <option value="">Select</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Comm ID</label>
+                  <div className="relative group">
+                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-indigo-600 transition-colors" size={16} />
+                    <input 
+                      type="tel" 
+                      value={formData.phone}
+                      onChange={e => setFormData({...formData, phone: e.target.value})}
+                      placeholder="Phone"
+                      className="w-full bg-slate-50 border border-slate-100 py-4 pl-10 pr-4 rounded-2xl text-sm font-bold focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Security Key (Optional)</label>
+                <div className="relative group">
+                  <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-indigo-600 transition-colors" size={20} />
+                  <input 
+                    type="password" 
+                    value={formData.password}
+                    onChange={e => setFormData({...formData, password: e.target.value})}
+                    placeholder="Reset security key"
+                    className="w-full bg-slate-50 border border-slate-100 py-4 pl-12 pr-4 rounded-2xl text-sm font-bold focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 transition-all"
+                  />
+                </div>
+                <p className="text-[9px] font-medium text-slate-400 italic pl-2">Leave blank to retain current protocols</p>
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={loading || uploading}
+                className="w-full bg-slate-900 text-white py-5 rounded-[2rem] font-black text-[10px] uppercase tracking-[0.3em] hover:bg-indigo-600 transition-all shadow-xl shadow-slate-200 flex items-center justify-center gap-3 disabled:opacity-50 mt-4 group"
+              >
+                {loading ? <RefreshCw className="animate-spin" size={18} /> : <Save size={18} className="group-hover:scale-125 transition-transform" />}
+                {loading ? 'Synchronizing...' : 'Authorize Updates'}
+              </button>
+            </form>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+};
+
 const Profile = () => {
-  const { user, refreshUser } = useAuth(); // assume refreshed user data needs to be pulled
+  const { user, refreshUser } = useAuth();
   const [showTopUp, setShowTopUp] = useState(false);
   const [showWithdraw, setShowWithdraw] = useState(false);
+  const [showEditProfile, setShowEditProfile] = useState(false);
   const [showBalance, setShowBalance] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [transactions, setTransactions] = useState([]);
   const [balance, setBalance] = useState(user?.walletBalance || 0);
+  const [reviews, setReviews] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+  const [reviewsPage, setReviewsPage] = useState(1);
+  const [hasMoreReviews, setHasMoreReviews] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const fetchWalletData = async () => {
      try {
@@ -37,13 +284,33 @@ const Profile = () => {
      }
   };
 
+  const fetchReviews = async (page = 1, append = false) => {
+     try {
+        if (!append) setReviewsLoading(true);
+        else setLoadingMore(true);
+
+        const { data } = await api.get(`/reviews/${user._id}?page=${page}&limit=10`);
+        if (data.success) {
+           setReviews(prev => append ? [...prev, ...data.reviews] : data.reviews);
+           setHasMoreReviews(data.hasMore);
+           setReviewsPage(data.currentPage);
+        }
+     } catch (error) {
+        console.error('Failed to fetch reviews');
+     } finally {
+        setReviewsLoading(false);
+        setLoadingMore(false);
+     }
+  };
+
   useEffect(() => {
      fetchWalletData();
-  }, []);
+     fetchReviews();
+  }, [user._id]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    await fetchWalletData();
+    await Promise.all([fetchWalletData(), fetchReviews()]);
     setTimeout(() => setIsRefreshing(false), 800);
   };
 
@@ -54,7 +321,12 @@ const Profile = () => {
     return { color: 'text-rose-600 bg-rose-50 border-rose-100', label: 'Unreliable' };
   };
 
-  const stats = [
+  const stats = user?.role === 'admin' ? [
+    { label: 'Security Clearance', value: 'Level 5', icon: ShieldCheck, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+    { label: 'Incidents Settled', value: user?.settledDisputes || 0, icon: Shield, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { label: 'Platform Trust', value: 'Optimal', icon: Zap, color: 'text-amber-500', bg: 'bg-amber-50' },
+    { label: 'Auth Level', value: 'Admin', icon: Fingerprint, color: 'text-purple-600', bg: 'bg-purple-50' }
+  ] : [
     { label: 'Trust Score', value: user?.trustScore || 100, icon: Shield, color: 'text-indigo-600', bg: 'bg-indigo-50' },
     { label: 'Trips Completed', value: user?.totalCompletedRides || 0, icon: MapPin, color: 'text-emerald-600', bg: 'bg-emerald-50' },
     { label: 'Rating', value: user?.averageRating || 5.0, icon: Star, color: 'text-amber-500', bg: 'bg-amber-50' },
@@ -82,8 +354,20 @@ const Profile = () => {
             <div className="px-10 md:px-16 pb-16 relative -mt-24">
                <div className="flex flex-col md:flex-row items-end gap-8 mb-12">
                   <div className="relative group">
-                     <div className="h-40 w-40 rounded-[3.5rem] bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white text-6xl font-black shadow-2xl shadow-indigo-200 ring-[12px] ring-white">
-                        {user?.name?.charAt(0)}
+                     <div className="h-44 w-44 rounded-[3.5rem] bg-white flex items-center justify-center text-white text-6xl font-black shadow-2xl shadow-indigo-100 ring-[12px] ring-white overflow-hidden transition-transform duration-700 hover:scale-105">
+                        {user?.profilePhoto ? (
+                           <img 
+                            src={user.profilePhoto} 
+                            alt="Profile" 
+                            className="h-full w-full object-cover hd-profile rounded-[3rem]" 
+                            loading="lazy"
+                            onError={(e) => { e.target.src = 'https://ui-avatars.com/api/?name=' + user.name + '&background=random'; }}
+                           />
+                        ) : (
+                           <div className="h-full w-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center">
+                              {user?.name?.charAt(0)}
+                           </div>
+                        )}
                      </div>
                      <div className="absolute bottom-2 right-2 h-14 w-14 bg-white rounded-2xl flex items-center justify-center ring-[6px] ring-white shadow-lg">
                         <div className={`h-10 w-10 rounded-xl flex items-center justify-center font-black ${getTrustScoreInfo(user?.trustScore).color}`}>
@@ -97,7 +381,7 @@ const Profile = () => {
                      <div className="flex flex-wrap items-center gap-4">
                         <div className="flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-xl border border-slate-200/50">
                            <User size={14} className="text-slate-500" />
-                           <span className="text-[11px] font-black text-slate-600 uppercase tracking-widest leading-none">{user?.gender} Member</span>
+                           <span className="text-[11px] font-black text-slate-600 uppercase tracking-widest leading-none capitalize">{user?.gender} Member</span>
                         </div>
                         <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border font-black text-[11px] uppercase tracking-widest leading-none ${getTrustScoreInfo(user?.trustScore).color}`}>
                            <Shield size={14} />
@@ -107,19 +391,22 @@ const Profile = () => {
                   </div>
 
                   <div className="flex gap-4">
-                     <button className="px-8 py-4 bg-indigo-600 text-white rounded-[1.5rem] font-black text-sm uppercase tracking-widest hover:scale-105 transition-transform shadow-xl shadow-indigo-100 flex items-center gap-3 group">
+                     <button 
+                        onClick={() => setShowEditProfile(true)}
+                        className="px-8 py-4 bg-indigo-600 text-white rounded-[1.5rem] font-black text-sm uppercase tracking-widest hover:scale-105 transition-transform shadow-xl shadow-indigo-100 flex items-center gap-3 group"
+                     >
                         <Settings size={18} className="group-hover:rotate-90 transition-transform duration-500" />
                         Edit Profile
                      </button>
                      {user?.role === 'admin' && (
-                         <Link 
-                           to="/admin"
-                           className="px-8 py-4 bg-slate-900 text-white rounded-[1.5rem] font-black text-sm uppercase tracking-widest hover:scale-105 transition-transform shadow-xl flex items-center gap-3 group"
-                         >
-                            <LayoutDashboard size={18} />
-                            Admin Console
-                         </Link>
-                      )}
+                          <Link 
+                            to="/admin"
+                            className="px-8 py-4 bg-slate-900 text-white rounded-[1.5rem] font-black text-sm uppercase tracking-widest hover:scale-105 transition-transform shadow-xl flex items-center gap-3 group"
+                          >
+                             <LayoutDashboard size={18} />
+                             Admin Console
+                          </Link>
+                       )}
                   </div>
                </div>
 
@@ -214,26 +501,41 @@ const Profile = () => {
                       </div>
                    </motion.div>
 
-                   {/* Stats Area */}
-                   <div className="lg:col-span-2 grid grid-cols-2 gap-6">
-                      {stats.map((stat, i) => (
-                         <motion.div 
-                           key={i}
-                           initial={{ opacity: 0, y: 20 }}
-                           animate={{ opacity: 1, y: 0 }}
-                           transition={{ delay: i * 0.1 }}
-                           className="bg-white p-8 rounded-[2.5rem] border border-slate-100 flex flex-col justify-between hover:shadow-xl hover:shadow-indigo-50 transition-all group"
+                   {stats.length > 0 && (
+                      <div className="lg:col-span-2 grid grid-cols-2 gap-6">
+                         {stats.map((stat, i) => (
+                            <motion.div 
+                              key={i}
+                              initial={{ opacity: 0, y: 20 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: i * 0.1 }}
+                              className="bg-white p-8 rounded-[2.5rem] border border-slate-100 flex flex-col justify-between hover:shadow-xl hover:shadow-indigo-50 transition-all group"
+                            >
+                               <div className={`${stat.bg} ${stat.color} h-12 w-12 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
+                                  <stat.icon size={22} />
+                               </div>
+                               <div>
+                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{stat.label}</p>
+                                  <p className="text-2xl font-black text-slate-800 tracking-tighter italic">{stat.value}</p>
+                               </div>
+                            </motion.div>
+                         ))}
+                      </div>
+                   )}
+
+                   {/* Load More Reviews Button */}
+                   {hasMoreReviews && !reviewsLoading && (
+                      <div className="mt-12 text-center">
+                         <button 
+                           onClick={() => fetchReviews(reviewsPage + 1, true)}
+                           disabled={loadingMore}
+                           className="bg-slate-50 border border-slate-200 text-slate-600 px-10 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white hover:border-indigo-600 hover:text-indigo-600 transition-all shadow-sm flex items-center gap-3 mx-auto disabled:opacity-50"
                          >
-                            <div className={`${stat.bg} ${stat.color} h-12 w-12 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
-                               <stat.icon size={22} />
-                            </div>
-                            <div>
-                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{stat.label}</p>
-                               <p className="text-2xl font-black text-slate-800 tracking-tighter italic">{stat.value}</p>
-                            </div>
-                         </motion.div>
-                      ))}
-                   </div>
+                            {loadingMore ? <RefreshCw className="animate-spin" size={14} /> : <Zap size={14} />}
+                            {loadingMore ? 'SYNCING DATA...' : 'LOAD MORE EXPERIENCES'}
+                         </button>
+                      </div>
+                   )}
                 </div>
 
                 {/* Priority Status — Justice Reward */}
@@ -401,20 +703,154 @@ const Profile = () => {
                   </div>
                </div>
 
+               {/* ⭐ Verified Human Reviews — Phase 5 Discovery */}
+               <div className="mt-20">
+                  <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+                     <div className="space-y-2">
+                        <h2 className="text-4xl font-black text-slate-900 tracking-tighter italic uppercase leading-none">
+                           What people say about <span className="text-indigo-600 underline decoration-indigo-200 decoration-4 underline-offset-8">{user?.name.split(' ')[0]}</span>
+                        </h2>
+                        <div className="flex items-center gap-3 ml-1">
+                           <div className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse"></div>
+                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-[.3em]">
+                              {reviews.length} Verified Experience Logs
+                           </p>
+                        </div>
+                     </div>
+                     
+                     <div className="flex items-center gap-2 bg-slate-50 border border-slate-100 px-6 py-3 rounded-2xl">
+                        <Star className="text-amber-500 fill-amber-500" size={16} />
+                        <span className="text-xl font-black text-slate-800 italic">{user?.averageRating || '5.0'}</span>
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2 border-l border-slate-200">Global Score</span>
+                     </div>
+                  </div>
+
+                  {reviewsLoading ? (
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {[1, 2].map(i => (
+                           <div key={i} className="h-48 bg-slate-50/50 rounded-[3rem] animate-pulse border border-slate-100"></div>
+                        ))}
+                     </div>
+                  ) : reviews.length === 0 ? (
+                     <div className="bg-slate-50/30 rounded-[3.5rem] border-2 border-dashed border-slate-100 p-20 text-center flex flex-col items-center">
+                        <div className="h-16 w-16 bg-white rounded-2xl flex items-center justify-center text-slate-200 mb-6 shadow-sm">
+                           <MessageSquare className="animate-bounce" size={32} />
+                        </div>
+                        <h3 className="text-xl font-black text-slate-400 tracking-tighter uppercase italic">No reviews yet</h3>
+                        <p className="text-xs font-medium text-slate-300 italic mt-1 uppercase tracking-widest">Completed journeys will appear here as feedback</p>
+                     </div>
+                  ) : (
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {reviews.map((rev) => (
+                           <motion.div
+                             key={rev._id}
+                             whileHover={{ y: -8 }}
+                             className="bg-white p-8 rounded-[3rem] border border-slate-100 shadow-xl shadow-indigo-100/10 hover:shadow-indigo-100/30 transition-all group relative overflow-hidden"
+                           >
+                              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50/30 rounded-bl-full -translate-y-8 translate-x-8 group-hover:translate-y-0 group-hover:translate-x-0 transition-transform duration-700 pointer-events-none"></div>
+                              
+                              <div className="flex items-start justify-between mb-6">
+                                 <div className="flex items-center gap-4">
+                                    <div className="h-14 w-14 rounded-2xl bg-indigo-50 border-2 border-white overflow-hidden shadow-lg group-hover:scale-110 transition-transform">
+                                       {rev.reviewer?.profilePhoto ? (
+                                          <img 
+                                            src={rev.reviewer.profilePhoto} 
+                                            alt={rev.reviewer.name} 
+                                            className="w-full h-full object-cover hd-profile rounded-xl" 
+                                            loading="lazy"
+                                            onError={(e) => { e.target.src = 'https://ui-avatars.com/api/?name=' + rev.reviewer.name + '&background=6366f1&color=fff'; }}
+                                          />
+                                       ) : (
+                                          <div className="w-full h-full flex items-center justify-center text-indigo-200 bg-indigo-600 font-black italic text-xl uppercase">
+                                             {rev.reviewer?.name?.charAt(0)}
+                                          </div>
+                                       )}
+                                    </div>
+                                    <div>
+                                       <h4 className="text-sm font-black text-slate-800 uppercase tracking-tight italic group-hover:text-indigo-600 transition-colors">
+                                          {rev.reviewer?.name}
+                                       </h4>
+                                       <div className="flex gap-0.5 mt-1">
+                                          {[...Array(5)].map((_, i) => (
+                                             <Star 
+                                               key={i} 
+                                               size={10} 
+                                               className={i < rev.rating ? 'text-amber-500 fill-amber-500' : 'text-slate-200'}
+                                             />
+                                          ))}
+                                       </div>
+                                    </div>
+                                 </div>
+                                 <div className="text-right">
+                                    <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest leading-none">
+                                       {new Date(rev.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                    </p>
+                                 </div>
+                              </div>
+
+                              <div className="relative z-10">
+                                 <p className="text-sm font-medium text-slate-600 italic leading-relaxed pl-4 border-l-2 border-indigo-100 mb-6 group-hover:border-indigo-500 transition-colors">
+                                    "{rev.comment}"
+                                 </p>
+
+                                 {/* Ride Context */}
+                                 {rev.rideId && (
+                                    <div className="inline-flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100 group-hover:bg-indigo-50 transition-colors">
+                                       <div className="flex items-center gap-1.5 opacity-60">
+                                          <MapPin size={10} className="text-indigo-600" />
+                                          <span className="text-[9px] font-black uppercase text-slate-400 tracking-tighter truncate max-w-[80px]">
+                                             {rev.rideId.from?.split(',')[0] || 'Origin'}
+                                          </span>
+                                       </div>
+                                       <ChevronRight size={10} className="text-slate-300" />
+                                       <div className="flex items-center gap-1.5 opacity-60">
+                                          <Navigation size={10} className="text-indigo-600 rotate-45" />
+                                          <span className="text-[9px] font-black uppercase text-slate-400 tracking-tighter truncate max-w-[80px]">
+                                             {rev.rideId.to?.split(',')[0] || 'Dest'}
+                                          </span>
+                                       </div>
+                                    </div>
+                                 )}
+                              </div>
+                           </motion.div>
+                        ))}
+                     </div>
+                  )}
+               </div>
+
                {/* Quick Links */}
                <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <Link to="/bookings" className="flex items-center justify-between bg-white border border-slate-100 p-6 rounded-3xl hover:border-indigo-200 transition-all group shadow-sm">
-                     <span className="font-bold text-slate-700">Trip History</span>
-                     <ChevronRight size={18} className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" />
-                  </Link>
-                  <Link to="/offer-ride" className="flex items-center justify-between bg-white border border-slate-100 p-6 rounded-3xl hover:border-indigo-200 transition-all group shadow-sm">
-                     <span className="font-bold text-slate-700">Earnings Log</span>
-                     <ChevronRight size={18} className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" />
-                  </Link>
-                  <div className="flex items-center justify-between bg-white border border-slate-100 p-6 rounded-3xl hover:border-red-200 transition-all group shadow-sm cursor-pointer opacity-50 grayscale hover:grayscale-0">
-                     <span className="font-bold text-slate-700">Emergency Protocol</span>
-                     <ChevronRight size={18} className="text-slate-300 group-hover:text-red-500 group-hover:translate-x-1 transition-all" />
-                  </div>
+                  {user?.role === 'admin' ? (
+                     <>
+                        <Link to="/admin" className="flex items-center justify-between bg-white border border-slate-100 p-6 rounded-3xl hover:border-indigo-200 transition-all group shadow-sm">
+                           <span className="font-bold text-slate-700">HQ Dashboard</span>
+                           <ChevronRight size={18} className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" />
+                        </Link>
+                        <Link to="/admin/users" className="flex items-center justify-between bg-white border border-slate-100 p-6 rounded-3xl hover:border-indigo-200 transition-all group shadow-sm">
+                           <span className="font-bold text-slate-700">Member Registry</span>
+                           <ChevronRight size={18} className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" />
+                        </Link>
+                        <div className="flex items-center justify-between bg-slate-50 border border-slate-100 p-6 rounded-3xl opacity-50 cursor-not-allowed shadow-sm">
+                           <span className="font-bold text-slate-400">System Logs</span>
+                           <Shield size={18} className="text-slate-200" />
+                        </div>
+                     </>
+                  ) : (
+                     <>
+                        <Link to="/bookings" className="flex items-center justify-between bg-white border border-slate-100 p-6 rounded-3xl hover:border-indigo-200 transition-all group shadow-sm">
+                           <span className="font-bold text-slate-700">Trip History</span>
+                           <ChevronRight size={18} className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" />
+                        </Link>
+                        <Link to="/offer-ride" className="flex items-center justify-between bg-white border border-slate-100 p-6 rounded-3xl hover:border-indigo-200 transition-all group shadow-sm">
+                           <span className="font-bold text-slate-700">Earnings Log</span>
+                           <ChevronRight size={18} className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" />
+                        </Link>
+                        <div className="flex items-center justify-between bg-white border border-slate-100 p-6 rounded-3xl hover:border-red-200 transition-all group shadow-sm cursor-pointer opacity-50 grayscale hover:grayscale-0">
+                           <span className="font-bold text-slate-700">Emergency Protocol</span>
+                           <ChevronRight size={18} className="text-slate-300 group-hover:text-red-500 group-hover:translate-x-1 transition-all" />
+                        </div>
+                     </>
+                  )}
                </div>
             </div>
          </motion.div>
@@ -438,6 +874,15 @@ const Profile = () => {
         onSuccess={async () => {
            await refreshUser();
            await fetchWalletData();
+        }}
+      />
+
+      <EditProfileModal 
+        show={showEditProfile}
+        onClose={() => setShowEditProfile(false)}
+        user={user}
+        onUpdate={async () => {
+          await refreshUser();
         }}
       />
     </div>

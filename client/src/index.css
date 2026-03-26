@@ -86,3 +86,52 @@ body {
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
 }
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #e2e8f0;
+  border-radius: 10px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #6366f1;
+}
+
+/* Premium Clarity Image Protocol - Extreme High-Fidelity Stack */
+.hd-profile {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  image-rendering: high-quality;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  -webkit-user-drag: none;
+  image-orientation: from-image;
+  
+  /* Advanced Sharpening Convolution Filter */
+  /* This compensates for browser downscaling interpolation blur */
+  filter: contrast(1.15) brightness(1.05) saturate(1.1) drop-shadow(0 0 1px rgba(0,0,0,0.05));
+  
+  /* Micro-animation for tactile feel */
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), filter 0.6s ease;
+  will-change: transform, filter;
+
+  /* Force hardware compositor layer */
+  z-index: 10;
+}
+
+.hd-profile:hover {
+  filter: contrast(1.18) brightness(1.08) saturate(1.12);
+  transform: scale(1.02) translateZ(0);
+}
+
+.premium-avatar-container {
+  @apply relative overflow-hidden bg-white border-white shadow-2xl;
+  isolation: isolate;
+  background-clip: padding-box;
+}
