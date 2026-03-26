@@ -110,6 +110,14 @@ exports.completeRide = async (req, res) => {
 
           // Driver's account is adjusted for the platform's cut
           transactions.push({
+             userId: req.user._id,
+             type: 'RIDE_EARNING',
+             amount: 0,
+             rideId: ride._id,
+             description: `Fare Collected (Cash) - ₹${originalFare}`
+          });
+
+          transactions.push({
             userId: req.user._id,
             type: 'COMMISSION',
             amount: -netCommission,
@@ -182,24 +190,18 @@ exports.completeRide = async (req, res) => {
     console.log(`[RideComplete] ✅ Ride ${ride._id} completed by ${req.user._id}. Trust Score: ${req.user.trustScore}`);
 
     // 5. NOTIFY DRIVER (Self) about earnings/commissions
-    let completionMessage = 'Ride marked as completed. Earnings released to wallet!';
-    if (totalRiderEarnings < 0) {
-      completionMessage = `Ride completed! ₹${Math.abs(totalRiderEarnings)} commission deducted for cash journeys.`;
-      
-      await Notification.create({
-        user: req.user._id,
-        type: 'COMMISSION_DEDUCTED',
-        title: 'Settlement Notice 💳',
-        message: `₹${Math.abs(totalRiderEarnings)} deducted for your cash ride to ${ride.to}. Please ensure you collected ₹${confirmedBookings.reduce((sum, b) => sum + (b.paymentMethod === 'cash' ? (b.totalDriverEarnings / 0.8) : 0), 0)} from passengers.`,
-        rideId: ride._id
-      });
-    }
+    // Notify Admin Dashboard
+    socketManager.emitToAdmin('ride_completed', {
+        rideId: ride._id,
+        earningsReleased: totalAdminBalanceChange,
+        message: `Ride ${ride._id.toString().slice(-6)} completed. Revenue sync'd.`
+    });
 
     res.status(200).json({ 
       success: true, 
       message: completionMessage, 
       trustScore: req.user.trustScore,
-      earned: totalRiderEarnings
+      earned: totalRiderBalanceChange
     });
 
   } catch (error) {
@@ -311,7 +313,7 @@ exports.startCronJobs = () => {
           const departureTime = new Date(`${dateStr}T${ride.time}`);
           const diffMinutes = (departureTime - now) / 60000;
           
-          if (diffMinutes <= 5.5 && diffMinutes >= -15) {
+          if (diffMinutes <= 15 && diffMinutes >= -15) {
               let changed = false;
               for (const booking of ride.bookings) {
                   if (booking.status === 'confirmed' && !booking.otp) {
@@ -337,7 +339,7 @@ exports.startCronJobs = () => {
                   }
               }
               if (changed) {
-                  ride.markArrivedAvailableAt = new Date(departureTime.getTime() + 2 * 60 * 1000);
+                  ride.markArrivedAvailableAt = new Date(departureTime.getTime() + (ride.waitingTime || 10) * 60 * 1000);
                   ride.markModified('bookings');
                   await ride.save();
                   console.log(`[Cron-OTP] 🔐 Generated OTPs for Ride ${ride._id}`);
@@ -449,8 +451,8 @@ exports.startCronJobs = () => {
   processAutoRefunds();
   processAutoRelease();
 
-  // Set intervals
-  setInterval(generateOTPs, 60 * 1000);
+  // Set intervals: Switched to 10s for OTPs for higher sensitivity
+  setInterval(generateOTPs, 10 * 1000);
   setInterval(processAutoRefunds, 60 * 1000);
   setInterval(processAutoRelease, 60 * 1000);
 };
@@ -670,6 +672,7 @@ exports.getAllRides = async (req, res) => {
 
       // Boarding Radius: Find rides that pass within 35km of passenger
       const gpsCandidates = await Ride.find({
+        ...query,
         ...genderQuery,
         routePoints: {
           $near: {
@@ -1160,6 +1163,9 @@ exports.cancelRide = async (req, res) => {
     if (restrictionHours > 0) {
       const restrictedUntil = new Date(now.getTime() + restrictionHours * 60 * 60 * 1000);
       rider.restrictedUntil = restrictedUntil;
+      rider.restrictionReason = penaltyType === 'strike' 
+        ? `Late Cancellation Violation (Cancelled < 30m before departure)`
+        : `System Warning Threshold (Reached 3 warnings for cancellations)`;
     }
 
     await rider.save();
@@ -1334,6 +1340,7 @@ exports.reportNoShow = async (req, res) => {
        const restrictionHours = 48; 
        const restrictedUntil = new Date(now.getTime() + restrictionHours * 60 * 60 * 1000);
        rider.restrictedUntil = restrictedUntil;
+       rider.restrictionReason = `Majority No-Show Violation (Passengers reported you did not arrive for Ride ${ride._id})`;
        await rider.save();
 
        console.log(`[NoShow] 🛑 PENALTY TRIGGERED for ${ride.driver}. Strike added. Restricted for 48h.`);

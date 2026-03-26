@@ -37,6 +37,21 @@ const AddMoneyModal = ({ show, onClose, onSuccess }) => {
     }
   };
 
+  const handlePaymentSuccess = async (paymentIntentId) => {
+    try {
+      setLoading(true);
+      await api.post('/payments/topup/confirm', { paymentIntentId });
+      toast.success('Funds added successfully!');
+      onSuccess && onSuccess();
+    } catch (err) {
+      console.error('Confirmation Error:', err);
+      // Even if our manual check fails, the webhook might still work, so we proceed to refresh
+      onSuccess && onSuccess();
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (!show) return null;
 
   return (
@@ -152,7 +167,7 @@ const AddMoneyModal = ({ show, onClose, onSuccess }) => {
                 <StripePaymentForm 
                   clientSecret={clientSecret} 
                   onCancel={() => setPaymentStep(1)} 
-                  onSuccess={onSuccess}
+                  onSuccess={handlePaymentSuccess}
                 />
               </div>
             )}

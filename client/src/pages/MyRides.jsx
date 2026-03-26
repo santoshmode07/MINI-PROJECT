@@ -8,6 +8,7 @@ import {
   Shield, Mail, Ban, AlertTriangle, DollarSign, Wallet
 } from 'lucide-react';
 import api from '../api/axios';
+import { useAuth } from '../context/AuthContext';
 import Navbar from '../components/Navbar';
 import { toast } from 'react-toastify';
 import { useSocket } from '../context/SocketContext';
@@ -19,6 +20,7 @@ const MyRides = () => {
   const [selectedRideForCancel, setSelectedRideForCancel] = useState(null);
   const [appealInfo, setAppealInfo] = useState(null);
   const { socket, isConnected } = useSocket();
+  const { refreshUser } = useAuth();
   const navigate = useNavigate();
 
   const fetchRides = async () => {
@@ -80,6 +82,7 @@ const MyRides = () => {
       }
       
       fetchRides();
+      refreshUser();
     } catch (error) {
       toast.error(error?.response?.data?.message || 'Failed to cancel ride');
     }

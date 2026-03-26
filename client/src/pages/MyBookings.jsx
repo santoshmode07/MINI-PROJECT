@@ -42,7 +42,18 @@ const MyBookings = () => {
 
     const handleRideEvent = (data) => {
       console.log('[Socket] Ride event on MyBookings:', data);
-      fetchBookings(); // Refresh list for any ride status/dropoff change
+      
+      // OPTIMISTIC UPDATE: If OTP is ready, let's inject it into state immediately
+      if (data.otp && data.rideId) {
+        setBookings(prev => prev.map(b => {
+           if (b.ride._id === data.rideId) {
+             return { ...b, booking: { ...b.booking, otp: data.otp, boardingStatus: 'pending' } };
+           }
+           return b;
+        }));
+      }
+
+      fetchBookings(); // Still refresh to be safe and sync entire state
       if (data.message) toast.info(data.message);
     };
 
@@ -126,8 +137,8 @@ const MyBookings = () => {
     const departure = new Date(`${new Date(rideDate).toISOString().split('T')[0]}T${rideTime}`);
     const now = new Date();
     
-    // Boarding window starts 5.5 minutes before departure
-    const boardingStart = new Date(departure.getTime() - 5.5 * 60 * 1000);
+    // Boarding window starts 15 minutes before departure (Synced with OTP generation)
+    const boardingStart = new Date(departure.getTime() - 15 * 60 * 1000);
     const sixHoursLater = new Date(departure.getTime() + 6 * 60 * 60 * 1000);
 
     if (now < boardingStart) return 'UPCOMING';

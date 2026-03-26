@@ -71,6 +71,10 @@ const userSchema = new mongoose.Schema({
         type: Date,
         default: null
     },
+    restrictionReason: {
+        type: String,
+        default: ''
+    },
     totalCancellations: {
         type: Number,
         default: 0

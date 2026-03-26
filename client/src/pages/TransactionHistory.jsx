@@ -49,7 +49,8 @@ const TransactionHistory = () => {
   const getTransactionIcon = (type) => {
     switch (type) {
       case 'MONEY_ADDED': 
-      case 'Money Added': return { icon: CreditCard, color: 'text-emerald-500', bg: 'bg-emerald-50', label: 'Balance Top-up' };
+      case 'TOPUP':
+      case 'Money Added': return { icon: CreditCard, color: 'text-emerald-500', bg: 'bg-emerald-50', label: 'System Top-up' };
       case 'RIDE_PAYMENT':
       case 'Ride Payment': return { icon: ShoppingBag, color: 'text-indigo-500', bg: 'bg-indigo-50', label: 'Ride Payment' };
       case 'COMMISSION':
@@ -63,11 +64,15 @@ const TransactionHistory = () => {
 
   const filteredTransactions = transactions.filter(t => {
     if (filter === 'All') return true;
-    if (filter === 'FEES') return t.type === 'COMMISSION' || t.type === 'Commission';
-    if (filter === 'BOOKINGS') return t.type === 'RIDE_PAYMENT' || t.type === 'Ride Payment';
-    if (filter === 'EARNINGS') return t.type === 'RIDE_EARNING';
-    if (filter === 'REFUNDS') return t.type === 'REFUND' || t.type === 'Refund';
-    return t.type === filter;
+    if (filter === 'PAYMENTS') {
+       return t.type === 'MONEY_ADDED' || t.type === 'TOPUP' || t.type === 'Money Added' || t.description?.toLowerCase().includes('online') || t.metadata?.paymentIntentId;
+    }
+    const typeLabel = (t.type || '').toUpperCase();
+    if (filter === 'FEES') return typeLabel === 'COMMISSION' || t.label === 'System Fee';
+    if (filter === 'BOOKINGS') return typeLabel === 'RIDE_PAYMENT' || typeLabel === 'RIDE PAYMENT';
+    if (filter === 'EARNINGS') return typeLabel === 'RIDE_EARNING' || typeLabel === 'RIDE EARNING';
+    if (filter === 'REFUNDS') return typeLabel === 'REFUND';
+    return typeLabel === filter;
   });
 
   // Pagination Math
@@ -79,6 +84,7 @@ const TransactionHistory = () => {
 
   const filterBtns = [
     { id: 'All', label: 'Everything' },
+    { id: 'PAYMENTS', label: 'Online Payments' },
     { id: 'FEES', label: 'Fees' },
     { id: 'BOOKINGS', label: 'Bookings' },
     { id: 'EARNINGS', label: 'Earnings' },

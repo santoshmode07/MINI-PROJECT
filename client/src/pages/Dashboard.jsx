@@ -2,7 +2,7 @@ import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, MapPin, ArrowRight, Sparkles, TrendingUp, Ban, AlertTriangle, Star } from 'lucide-react';
+import { Search, MapPin, ArrowRight, Sparkles, TrendingUp, Ban, AlertTriangle, Star, Clock } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { useNotifications } from '../context/NotificationContext';
 
@@ -94,38 +94,51 @@ const Dashboard = () => {
         {/* Account Restricted Status — JUSTICE SYTEM FEEDBACK */}
         {user?.restrictedUntil && new Date(user.restrictedUntil) > new Date() && (
           <motion.div 
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-4xl mb-12"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="w-full mb-12 px-4"
           >
-            <div className="bg-rose-600 rounded-[3rem] p-10 text-white relative overflow-hidden shadow-2xl shadow-rose-200 border-4 border-rose-500/50">
-               <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-               <div className="relative z-10 flex flex-col md:flex-row items-center gap-10">
-                  <div className="h-20 w-20 bg-white shadow-xl rounded-[2rem] flex items-center justify-center shrink-0 border-4 border-rose-400 animate-pulse">
-                    <Ban size={40} className="text-rose-600" />
-                  </div>
-                  <div className="flex-1 text-center md:text-left">
-                    <div className="inline-flex items-center gap-2 bg-rose-700/50 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-4 border border-rose-400/30">
-                       <AlertTriangle size={12} /> System Restriction Active
-                    </div>
-                    <h2 className="text-3xl font-black tracking-tight italic mb-3 leading-none italic uppercase">Transit Privileges Revoked</h2>
-                    <p className="text-rose-100 font-medium text-sm max-w-xl leading-relaxed italic opacity-90">
-                       Your account was automatically restricted following a <span className="text-white font-black underline decoration-rose-300">Majority No-Show Report</span> from your recent passengers. We uphold a strict promptness policy to ensure communal safety and trust.
-                    </p>
-                    
-                    <div className="flex flex-wrap items-center gap-6 mt-8 pt-6 border-t border-rose-400/30">
-                       <div className="bg-rose-900/40 backdrop-blur-md px-6 py-3 rounded-2xl border border-rose-400/20">
-                          <p className="text-[9px] font-black text-rose-300 uppercase tracking-widest mb-1">Status Ends</p>
-                          <p className="text-lg font-black">{new Date(user.restrictedUntil).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</p>
-                       </div>
-                       <div className="bg-rose-900/40 backdrop-blur-md px-6 py-3 rounded-2xl border border-rose-400/20">
-                          <p className="text-[9px] font-black text-rose-300 uppercase tracking-widest mb-1">Wait Time remaining</p>
-                          <p className="text-lg font-black italic">{Math.ceil((new Date(user.restrictedUntil) - new Date()) / (1000 * 60 * 60))} Hours</p>
-                       </div>
-                    </div>
-                  </div>
-               </div>
-            </div>
+             <div className="bg-white rounded-[2rem] md:rounded-[3rem] p-8 md:p-12 border border-rose-100 shadow-2xl shadow-rose-50/50 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-rose-50/50 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                
+                <div className="relative z-10 flex flex-col md:flex-row items-center md:items-start gap-8 md:gap-12 text-center md:text-left">
+                   <div className="shrink-0 relative">
+                      <div className="h-20 w-20 md:h-24 md:w-24 bg-rose-600 rounded-3xl flex items-center justify-center text-white shadow-xl shadow-rose-200 border-4 border-white rotate-3 group-hover:rotate-6 transition-transform mx-auto">
+                         <Ban size={40} />
+                      </div>
+                      <div className="absolute -bottom-2 -center-x md:-right-2 h-8 w-8 bg-white rounded-xl shadow-lg flex items-center justify-center border border-rose-100">
+                         <Clock size={16} className="text-rose-600 animate-pulse" />
+                      </div>
+                   </div>
+
+                   <div className="flex-1">
+                      <div className="inline-flex items-center gap-2 bg-rose-50 text-rose-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest mb-4 border border-rose-100">
+                         <AlertTriangle size={12} /> RESTRICTION PROTOCOL ACTIVE
+                      </div>
+                      <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter italic mb-4 uppercase">Transit <span className="text-rose-600">Locked</span></h2>
+                      <p className="text-slate-500 font-medium text-sm md:text-base max-w-2xl leading-relaxed italic mb-8">
+                         {user.restrictionReason || "Your account has been restricted following a policy violation. We uphold a strict promptness policy to ensure communal safety and trust."}
+                      </p>
+
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-6 pt-6 border-t border-slate-50">
+                         <div className="space-y-1">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Restore Date</p>
+                            <p className="text-base font-black text-slate-900">{new Date(user.restrictedUntil).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}</p>
+                         </div>
+                         <div className="space-y-1">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Auto Unlock</p>
+                            <p className="text-base font-black text-slate-900">{new Date(user.restrictedUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                         </div>
+                         <div className="col-span-2 md:col-span-1 space-y-1">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Time Remaining</p>
+                            <p className="text-base font-black text-rose-600 italic">
+                               {Math.ceil((new Date(user.restrictedUntil) - new Date()) / (1000 * 60 * 60))} Hours Left
+                            </p>
+                         </div>
+                      </div>
+                   </div>
+                </div>
+             </div>
           </motion.div>
         )}
 
