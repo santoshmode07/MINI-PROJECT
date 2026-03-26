@@ -50,13 +50,20 @@ const PassengerList = ({ passengers, totalSeats, remainingSeats }) => {
                       {/* Avatar */}
                       <div className="relative shrink-0">
                          {p.passenger.profilePhoto ? (
-                           <img src={p.passenger.profilePhoto} className="h-16 w-16 rounded-2xl object-cover shadow-xl border-2 border-white" />
+                           <div className="h-16 w-16 rounded-2xl bg-white shadow-xl border-2 border-white overflow-hidden ring-4 ring-slate-50 transition-transform duration-500 hover:scale-110">
+                              <img 
+                                src={p.passenger.profilePhoto} 
+                                className="h-full w-full object-cover hd-profile" 
+                                loading="lazy"
+                                decoding="async"
+                              />
+                           </div>
                          ) : (
-                           <div className="h-16 w-16 rounded-2xl bg-indigo-600 flex items-center justify-center text-white text-2xl font-black italic border-2 border-white uppercase">
+                           <div className="h-16 w-16 rounded-2xl bg-indigo-600 flex items-center justify-center text-white text-2xl font-black italic border-2 border-white uppercase shadow-lg">
                              {p.passenger.name[0]}
                            </div>
                          )}
-                         <div className="absolute -top-1.5 -right-1.5 h-6 w-6 rounded-full bg-emerald-500 text-white flex items-center justify-center border-2 border-white shadow-lg">
+                         <div className="absolute -top-1.5 -right-1.5 h-6 w-6 rounded-full bg-emerald-500 text-white flex items-center justify-center border-2 border-white shadow-lg z-20">
                            <CheckCircle2 size={10} />
                          </div>
                       </div>

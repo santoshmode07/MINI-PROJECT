@@ -2,6 +2,7 @@ const Ride = require('../models/Ride');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const Notification = require('../models/Notification');
+const socketManager = require('../utils/socketManager');
 
 // @desc    Get boarding details for a ride (Driver only)
 // @route   GET /api/otp/boarding/:rideId
@@ -20,7 +21,7 @@ exports.getBoardingDetails = async (req, res) => {
     // Calculate time remaining in boarding window (20 min from departure)
     const dateStr = ride.date.toISOString().split('T')[0];
     const departureTime = new Date(`${dateStr}T${ride.time}`);
-    const boardingCloseTime = new Date(departureTime.getTime() + 5.5 * 60 * 1000); // 5.5 min boarding window
+    const boardingCloseTime = new Date(departureTime.getTime() + (ride.waitingTime || 10) * 60 * 1000); // Dynamic boarding window
     const now = new Date();
     const timeRemaining = Math.max(0, Math.floor((boardingCloseTime - now) / 1000));
 
@@ -43,6 +44,8 @@ exports.getBoardingDetails = async (req, res) => {
         rideFrom: ride.from,
         rideTo: ride.to,
         departureTime: ride.time,
+        waitingTime: ride.waitingTime || 10,
+        rideDate: ride.date,
         passengers,
         timeRemaining,
         verifiedCount: confirmedBookings.filter(b => b.otpVerified).length,
@@ -58,7 +61,7 @@ exports.getBoardingDetails = async (req, res) => {
 // @route   POST /api/otp/verify
 exports.verifyOTP = async (req, res) => {
   try {
-    const { rideId, otp } = req.body;
+    const { rideId, bookingId, otp } = req.body;
     const ride = await Ride.findById(rideId);
 
     if (!ride) return res.status(404).json({ success: false, message: 'Ride not found' });
@@ -66,40 +69,18 @@ exports.verifyOTP = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Not authorized' });
     }
 
-    // Check if 20 minutes have passed from departure
-    const dateStr = ride.date.toISOString().split('T')[0];
-    const departureTime = new Date(`${dateStr}T${ride.time}`);
-    const now = new Date();
-    if (now > new Date(departureTime.getTime() + 5.5 * 60 * 1000)) {
-       return res.status(400).json({ success: false, message: 'Boarding window has closed (5.5m limit). Journey must start.' });
-    }
-
-    // Find booking with this OTP
-    const booking = ride.bookings.find(b => b.otp === otp && b.status === 'confirmed');
-
-    if (!booking) {
-      // Find ALL confirmed bookings for this ride to increment attempts (global logic as requested?)
-      // Wait, "Increment otpAttempts by 1 globally" might mean for all related bookings or just record an attempt.
-      // Usually, it's for the booking the driver is trying for.
-      // Since OTP is unique, if not found, we don't know which passenger it was for.
-      // I'll increment ALL pending bookings' attempts if no match? No, that's unfair.
-      // Re-reading: "Increment otpAttempts by 1 globally" might mean the driver's global fail count? 
-      // "If OTP not found in any booking: Increment otpAttempts by 1 globally"
-      // Let's assume it means log it in the ride itself or for all passengers. 
-      // Actually, if a driver enters a wrong OTP, it shouldn't lock EVERYONE.
-      // Let's just return Invalid OTP.
-       return res.status(400).json({ success: false, message: 'Invalid OTP' });
+    // Find the specific booking targeted by the driver
+    const booking = ride.bookings.id(bookingId);
+    if (!booking || booking.status !== 'confirmed') {
+       return res.status(404).json({ success: false, message: 'Specific booking not found on this journey' });
     }
 
     if (booking.otpLocked) {
-      return res.status(400).json({ success: false, message: 'This OTP has been locked after 5 failed attempts' });
+      return res.status(400).json({ success: false, message: 'Identity terminal locked (5 failed attempts)' });
     }
 
-    if (booking.otpAttempts >= 4 && booking.otp !== otp) { // 5th attempt is this one
-       booking.otpLocked = true;
-       booking.otpAttempts += 1;
-       await ride.save();
-       return res.status(400).json({ success: false, message: 'OTP locked after 5 failed attempts' });
+    if (booking.otpVerified) {
+       return res.status(400).json({ success: false, message: 'Passenger already verified' });
     }
 
     if (booking.otp === otp) {
@@ -115,14 +96,14 @@ exports.verifyOTP = async (req, res) => {
        await Notification.create({
          user: booking.passenger,
          type: 'BOARDING_CONFIRMED',
-         title: '✅ Boarding confirmed!',
-         message: `Have a safe journey to ${ride.to}`,
+         title: '✅ Identity Verified!',
+         message: `Have a safe journey to ${booking.dropoffPoint.address}. You are now officially boarded.`,
          rideId: ride._id
        });
 
        return res.status(200).json({
          success: true,
-         message: 'Passenger verified successfully',
+         message: 'Identity verified successfully',
          data: {
            name: passenger.name,
            boardingPoint: booking.boardingPoint.address
@@ -131,10 +112,15 @@ exports.verifyOTP = async (req, res) => {
     } else {
        booking.otpAttempts += 1;
        const remaining = 5 - booking.otpAttempts;
+       if (remaining <= 0) {
+          booking.otpLocked = true;
+          await ride.save();
+          return res.status(400).json({ success: false, message: 'Identity terminal locked (Max attempts reached)' });
+       }
        await ride.save();
        return res.status(400).json({ 
          success: false, 
-         message: `Invalid OTP. ${remaining} attempts remaining.`
+         message: `Invalid Secure Pin. ${remaining} attempts remaining.`
        });
     }
 
@@ -173,6 +159,23 @@ exports.processMoneyRelease = async (booking, ride, admin) => {
                 description: `Fare received (Online) - Journey to ${ride.to}`
             });
             
+            // Real Time Update
+            socketManager.emitToUser(ride.driver, 'fare_released', {
+                rideId: ride._id,
+                passengerName: passenger.name,
+                amount: riderCut,
+                releaseType: 'manual'
+            });
+
+            socketManager.emitToUser(ride.driver, 'wallet_updated', {
+                newBalance: driver.walletBalance,
+                transaction: {
+                    type: 'credit',
+                    amount: riderCut,
+                    description: `Fare received (Online) - Journey to ${ride.to}`
+                }
+            });
+
             if (admin) {
                 // 1. Release the full amount from escrow visibility
                 await Transaction.create({
@@ -302,7 +305,7 @@ exports.processMoneyRelease = async (booking, ride, admin) => {
                 user: booking.passenger,
                 type: 'RIDE_MISSED',
                 title: '❌ You missed your ride',
-                message: `You missed your ride to ${ride.to}. Better luck next time!`,
+                message: `You missed your ride to ${booking.dropoffPoint.address}. Better luck next time!`,
                 rideId: ride._id
             });
         }
@@ -319,15 +322,15 @@ exports.markArrived = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Not authorized' });
     }
 
-    // Check if 20 minutes after departure
+    // Check if waitingTime after departure
     const dateStr = ride.date.toISOString().split('T')[0];
     const departureTime = new Date(`${dateStr}T${ride.time}`);
-    const availableTime = new Date(departureTime.getTime() + 2 * 60 * 1000);
+    const availableTime = new Date(departureTime.getTime() + (ride.waitingTime || 10) * 60 * 1000);
     const now = new Date();
 
     if (now < availableTime) {
       const wait = Math.ceil((availableTime - now) / 60000);
-      return res.status(400).json({ success: false, message: `Mark As Arrived available after ${wait} minutes` });
+      return res.status(400).json({ success: false, message: `Journey starting available after ${wait} minutes of waiting.` });
     }
 
     if (ride.status === 'completed') {
@@ -347,33 +350,44 @@ exports.markArrived = async (req, res) => {
             b.boardingStatus = 'not_arrived';
         }
         
-        await exports.processMoneyRelease(b, ride, admin);
-
         if (b.boardingStatus === 'arrived') {
+            // NEW BEHAVIOR: Keep money in escrow, move to dropoff status
+            b.dropoffStatus = 'pending';
+            b.fareReleased = false;
             verifiedCount++;
+            
+            // Stats for summary (not actual credit)
             if (b.paymentMethod === 'online') {
-              walletCredit += b.totalDriverEarnings;
+                walletCredit += Math.round(b.totalDriverEarnings);
             } else {
-              cashCollection += b.totalDriverEarnings;
+                cashCollection += Math.round(b.totalDriverEarnings);
             }
-        } else {
+        } else if (b.boardingStatus === 'not_arrived') {
+            // Still process immediate refund for no-shows
+            await exports.processMoneyRelease(b, ride, admin);
             refundCount++;
         }
     }
 
-    ride.status = 'completed';
-    ride.journeyStartedAt = availableTime; // Logical start
+    ride.status = 'ongoing';
+    ride.journeyStartedAt = now; // Real start time
     ride.markedArrivedAt = now;
     await ride.save();
 
-    // Notify ALL verified passengers
-    const confirmedPassengers = confirmedBookings.filter(b => b.boardingStatus === 'arrived');
+    // Real Time Update
+    socketManager.emitToRide(ride._id, 'ride_status_changed', {
+        rideId: ride._id,
+        status: 'ongoing',
+        message: 'The journey has officially started!'
+    });
+
+    const confirmedPassengers = ride.bookings.filter(b => b.boardingStatus === 'arrived');
     if (confirmedPassengers.length > 0) {
         const notifications = confirmedPassengers.map(b => ({
             user: b.passenger,
             type: 'JOURNEY_STARTED',
             title: '🚗 Your journey has started!',
-            message: `Estimated arrival: ${ride.to}`,
+            message: `Estimated arrival: ${b.dropoffPoint.address}`,
             rideId: ride._id
         }));
         await Notification.insertMany(notifications);
@@ -381,12 +395,12 @@ exports.markArrived = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: `Journey finished! ✅ ${verifiedCount} passengers boarded.`,
+      message: `Syndicate Journey Started! 🚀 ${verifiedCount} passengers boarded.`,
       data: { 
         verifiedCount, 
         refundCount, 
-        walletCredit, // Direct to wallet
-        cashCollection // Driver has this physically
+        walletCredit, 
+        cashCollection 
       }
     });
 

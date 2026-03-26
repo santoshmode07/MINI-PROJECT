@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   History, Calendar, Clock, MapPin, Navigation, 
   Trash2, AlertTriangle, Loader2, Search, Car, Wallet,
-  Sparkles, ShieldCheck, Star, Phone, CreditCard, Banknote, XCircle
+  Sparkles, ShieldCheck, Star, Phone, CreditCard, Banknote, XCircle, CheckCircle2
 } from 'lucide-react';
 import api from '../api/axios';
 import { toast } from 'react-toastify';
@@ -12,6 +12,7 @@ import { Link } from 'react-router-dom';
 import ReviewModal from '../components/ReviewModal';
 import OTPDisplay from '../components/OTPDisplay';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 
 const MyBookings = () => {
   const { user } = useAuth();
@@ -22,15 +23,65 @@ const MyBookings = () => {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [selectedDriver, setSelectedDriver] = useState(null);
   const [selectedRideId, setSelectedRideId] = useState(null);
+  const { socket, isConnected, joinRideRoom, leaveRideRoom } = useSocket();
 
   useEffect(() => {
     fetchBookings();
   }, []);
 
+  useEffect(() => {
+    if (!bookings.length || !isConnected) return;
+
+    // Join rooms for all active/upcoming rides
+    bookings.forEach(b => {
+      const status = getRideStatus(b.ride.date, b.ride.time, b.ride.status);
+      if (status === 'ACTIVE' || status === 'UPCOMING') {
+        joinRideRoom(b.ride._id);
+      }
+    });
+
+    const handleRideEvent = (data) => {
+      console.log('[Socket] Ride event on MyBookings:', data);
+      fetchBookings(); // Refresh list for any ride status/dropoff change
+      if (data.message) toast.info(data.message);
+    };
+
+    socket.on('confirm_arrival', handleRideEvent);
+    socket.on('fare_released', handleRideEvent);
+    socket.on('ride_status_changed', handleRideEvent);
+    socket.on('otp_ready', handleRideEvent);
+
+    return () => {
+      bookings.forEach(b => leaveRideRoom(b.ride._id));
+      socket.off('confirm_arrival', handleRideEvent);
+      socket.off('fare_released', handleRideEvent);
+      socket.off('ride_status_changed', handleRideEvent);
+      socket.off('otp_ready', handleRideEvent);
+    };
+  }, [bookings.length, isConnected, socket]);
+
   const fetchBookings = async () => {
     try {
       const res = await api.get('/bookings/my');
-      setBookings(res.data.data);
+      
+      // WEIGHT-BASED SORTING: Active/Upcoming first, History last
+      const sorted = res.data.data.sort((a, b) => {
+        const getWeight = (ride) => {
+           const status = getRideStatus(ride.date, ride.time, ride.status);
+           if (status === 'ACTIVE') return 0;
+           if (status === 'UPCOMING') return 1;
+           if (status === 'COMPLETED') return 2;
+           if (status === 'CANCELLED') return 3;
+           return 4;
+        };
+        const weightA = getWeight(a.ride);
+        const weightB = getWeight(b.ride);
+        if (weightA !== weightB) return weightA - weightB;
+        // SECONDARY REFINEMENT: Recently booked journeys always take priority within their status tier
+        return new Date(b.booking.bookedAt) - new Date(a.booking.bookedAt);
+      });
+
+      setBookings(sorted);
     } catch (err) {
       toast.error('Failed to fetch bookings');
     } finally {
@@ -82,7 +133,20 @@ const MyBookings = () => {
     if (now < boardingStart) return 'UPCOMING';
     if (now < sixHoursLater) return 'ACTIVE';
     
-    return 'EXPIRED'; // Instead of COMPLETED, use EXPIRED if not marked by driver
+    return 'COMPLETED'; // Treat expired as completed in history
+  };
+
+  const handleConfirmArrival = async (rideId, arrived) => {
+    const action = arrived ? 'confirm your arrival' : 'raise a dispute';
+    if (!window.confirm(`Are you sure you want to ${action}?`)) return;
+
+    try {
+      await api.post(`/dropoff/passenger/confirm/${rideId}`, { arrived });
+      toast.success(arrived ? 'Arrival confirmed! Driver paid.' : 'Dispute raised. Admin will review.');
+      fetchBookings();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Action failed');
+    }
   };
 
   const handleOpenReview = (driver, rideId) => {
@@ -130,7 +194,7 @@ const MyBookings = () => {
                </div>
                <h3 className="text-2xl font-black text-slate-800 tracking-tighter leading-tight mb-4">No Active Bookings found.</h3>
                <p className="text-slate-500 font-medium max-w-sm mb-10 leading-relaxed uppercase tracking-tight text-xs">Your upcoming travel list is empty. Start a search to find your next adventure buddy.</p>
-               <Link to="/find-ride" className="bg-indigo-600 hover:bg-slate-900 text-white px-10 py-5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-indigo-100 active:scale-95 group">
+               <Link to="/find-rides" className="bg-indigo-600 hover:bg-slate-900 text-white px-10 py-5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-indigo-100 active:scale-95 group">
                   EXPLORE RIDES <Sparkles className="inline ml-2 group-hover:rotate-12 transition-transform" />
                </Link>
             </motion.div>
@@ -218,9 +282,16 @@ const MyBookings = () => {
                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Verification Shield — Driver</p>
                             <div className="flex items-center gap-4 bg-slate-50/50 p-4 rounded-3xl border border-slate-100 group/driver hover:bg-white hover:shadow-xl transition-all">
                                 {b.ride.driver.profilePhoto ? (
-                                  <img src={b.ride.driver.profilePhoto} className="h-16 w-16 rounded-2xl object-cover border-2 border-white shadow-lg" />
+                                  <img 
+                                    src={b.ride.driver.profilePhoto} 
+                                    className="h-20 w-20 rounded-2xl object-cover border-2 border-white shadow-xl shadow-indigo-100/50 hd-profile transition-transform hover:rotate-2" 
+                                    loading="lazy"
+                                    decoding="async"
+                                  />
                                 ) : (
-                                  <div className="h-16 w-16 rounded-2xl bg-indigo-600 flex items-center justify-center text-white text-2xl font-black italic border-2 border-white shadow-lg uppercase">{b.ride.driver.name[0]}</div>
+                                  <div className="h-20 w-20 rounded-2xl bg-indigo-600 flex items-center justify-center text-white text-3xl font-black italic border-2 border-white shadow-lg uppercase group-hover/driver:rotate-2 transition-transform">
+                                    {b.ride.driver.name[0]}
+                                  </div>
                                 )}
                                 <div>
                                    <h5 className="text-sm font-black text-slate-800 tracking-tight italic group-hover/driver:text-indigo-600 transition-colors uppercase">{b.ride.driver.name}</h5>
@@ -322,8 +393,76 @@ const MyBookings = () => {
                                    <XCircle size={16} /> Journey Terminated
                                 </div>
                               ) : getRideStatus(b.ride.date, b.ride.time, b.ride.status) === 'ACTIVE' ? (
-                                 <div className="mt-8">
+                                 <div className="mt-8 space-y-4">
+                                    {/* Safe Dropoff Confirmation */}
+                                    {b.booking.dropoffStatus === 'dropped' && (
+                                       <div className="bg-emerald-50 border-2 border-emerald-500/20 p-6 rounded-[2.5rem] shadow-xl shadow-emerald-100/50 animate-in fade-in zoom-in duration-500">
+                                          <div className="flex items-center gap-3 mb-4">
+                                            <div className="h-8 w-8 bg-emerald-500 rounded-full flex items-center justify-center text-white">
+                                              <Car size={16} />
+                                            </div>
+                                            <p className="text-[11px] font-black text-emerald-700 uppercase tracking-widest leading-tight">Driver says you've arrived!</p>
+                                          </div>
+                                          <div className="grid grid-cols-2 gap-3">
+                                            <button 
+                                              onClick={() => handleConfirmArrival(b.ride._id, true)}
+                                              className="bg-emerald-600 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"
+                                            >
+                                              <CheckCircle2 size={14} /> YES, ARRIVE
+                                            </button>
+                                            <button 
+                                              onClick={() => handleConfirmArrival(b.ride._id, false)}
+                                              className="bg-white border-2 border-rose-100 text-rose-500 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-50 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                            >
+                                              <AlertTriangle size={14} /> NO, DISPUTE
+                                            </button>
+                                          </div>
+                                       </div>
+                                    )}
+
+                                    {(b.booking.dropoffStatus === 'confirmed' || b.booking.dropoffStatus === 'auto_released') && (
+                                       <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-2xl flex items-center justify-center gap-3">
+                                          <CheckCircle2 size={16} className="text-emerald-500" />
+                                          <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Arrival Confirmed</span>
+                                       </div>
+                                    )}
+
+                                    {b.booking.disputeRaised && (
+                                       <div className="bg-rose-50 border border-rose-100 p-4 rounded-2xl flex items-center justify-center gap-3">
+                                          <AlertTriangle size={16} className="text-rose-500" />
+                                          <span className="text-[10px] font-black text-rose-600 uppercase tracking-widest">Dispute Under Review</span>
+                                       </div>
+                                    )}
+
                                     <OTPDisplay booking={b.booking} ride={b.ride} />
+                                    
+                                    {/* Report No-Show Button (Visible between 15-45 mins after departure) */}
+                                    {(() => {
+                                       const departure = new Date(`${new Date(b.ride.date).toISOString().split('T')[0]}T${b.ride.time}`);
+                                       const now = new Date();
+                                       const diffMinutes = (now - departure) / (1000 * 60);
+                                       const isBoarded = b.booking.boardingStatus === 'arrived';
+                                       
+                                       if (diffMinutes >= 15 && diffMinutes <= 45 && !isBoarded) {
+                                          return (
+                                             <button 
+                                               onClick={() => handleReportNoShow(b.ride._id)}
+                                               disabled={reportingId === b.ride._id}
+                                               className="w-full h-14 bg-rose-50 border border-rose-100 text-rose-500 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all flex items-center justify-center gap-3 hover:bg-rose-600 hover:text-white group"
+                                             >
+                                                {reportingId === b.ride._id ? (
+                                                   <Loader2 className="animate-spin" size={16} />
+                                                ) : (
+                                                   <>
+                                                      <AlertTriangle size={16} className="group-hover:animate-bounce" /> 
+                                                      Driver Not Here? Report No-Show
+                                                   </>
+                                                )}
+                                             </button>
+                                          );
+                                       }
+                                       return null;
+                                    })()}
                                  </div>
                               ) : (
                                  <button 

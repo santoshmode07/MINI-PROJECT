@@ -47,7 +47,7 @@ const BoardingScreen = () => {
 
   if (!boardingData) return null;
 
-  const { rideFrom, rideTo, departureTime, passengers, timeRemaining, verifiedCount, totalCount } = boardingData;
+  const { rideFrom, rideTo, departureTime, rideDate, waitingTime, passengers, timeRemaining, verifiedCount, totalCount } = boardingData;
 
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
@@ -77,16 +77,9 @@ const BoardingScreen = () => {
             </p>
           </div>
 
-          <div className="bg-white p-4 rounded-3xl shadow-xl shadow-indigo-100/50 border border-slate-100 flex items-center gap-6">
+          <div className="bg-white p-4 rounded-3xl shadow-xl shadow-indigo-100/50 border border-slate-100 flex items-center px-8">
             <div className="text-center">
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Window</p>
-              <div className={`text-xl font-black italic tabular-nums ${timeRemaining < 300 ? 'text-rose-500 animate-pulse' : 'text-slate-800'}`}>
-                {formatTime(timeRemaining)}
-              </div>
-            </div>
-            <div className="h-8 w-px bg-slate-100"></div>
-            <div className="text-center">
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Verify</p>
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Boarding verified</p>
               <div className="text-xl font-black text-emerald-500 tabular-nums italic">
                 {verifiedCount} <span className="text-slate-300">/</span> {totalCount}
               </div>
@@ -133,6 +126,8 @@ const BoardingScreen = () => {
            <MarkArrivedButton 
              rideId={rideId} 
              departureTime={departureTime}
+             rideDate={rideDate}
+             waitingTime={waitingTime}
              verifiedCount={verifiedCount}
              totalCount={totalCount}
              onComplete={() => navigate('/my-rides')}

@@ -127,134 +127,168 @@ const BookingModal = ({ isOpen, onClose, ride, fare, isBooking, onConfirm, dropo
 
             {paymentStep === 1 ? (
               <>
-                {/* Ride Summary Snippet */}
-                <div className="bg-indigo-600 p-8 rounded-[2rem] text-white shadow-xl shadow-indigo-100 flex items-center justify-between relative overflow-hidden">
-                  <div className="absolute top-0 right-0 h-32 w-32 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-                  <div>
-                    <p className="text-indigo-100 text-[10px] font-black uppercase tracking-widest mb-1">Your Trip Fare</p>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-3xl font-black italic">₹{fare}</span>
-                      <span className="text-indigo-200 text-xs font-bold line-through opacity-50">₹{ride?.price}</span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="bg-white/20 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tighter border border-white/20">
-                      Protected Seat
-                    </div>
-                  </div>
-                </div>
-
-                {/* Payment Selector */}
-                <div className="space-y-4">
-                  <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest ml-1 block italic opacity-60 font-outfit">Choose Method</label>
-                  <div className="grid grid-cols-1 gap-3">
-
-                    {/* CASH CARD */}
-                    <div
-                      onClick={() => setPaymentMethod('cash')}
-                      className={`flex items-center gap-4 p-5 rounded-3xl border-2 cursor-pointer transition-all ${paymentMethod === 'cash' ? 'border-indigo-600 bg-indigo-50/50 shadow-md translate-x-1' : 'border-slate-100 hover:border-slate-200 bg-white'}`}
-                    >
-                      <div className={`h-12 w-12 rounded-2xl flex items-center justify-center ${paymentMethod === 'cash' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                        <Banknote size={24} />
-                      </div>
-                      <div className="flex-1">
-                         <p className={`text-[11px] font-black uppercase tracking-widest ${paymentMethod === 'cash' ? 'text-indigo-600' : 'text-slate-900'}`}>💵 Cash to Driver</p>
-                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">Pay directly when you board</p>
-                      </div>
-                      {paymentMethod === 'cash' && <CheckCircle2 size={18} className="text-indigo-600" />}
-                    </div>
-
-                    {/* ONLINE CARD */}
-                    <div
-                      onClick={() => setPaymentMethod('online')}
-                      className={`flex items-center gap-4 p-5 rounded-3xl border-2 cursor-pointer transition-all ${paymentMethod === 'online' ? 'border-indigo-600 bg-indigo-50/50 shadow-md translate-x-1' : 'border-slate-100 hover:border-slate-200 bg-white'}`}
-                    >
-                      <div className={`h-12 w-12 rounded-2xl flex items-center justify-center ${paymentMethod === 'online' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                        <CreditCard size={24} />
-                      </div>
-                      <div className="flex-1">
-                         <p className={`text-[11px] font-black uppercase tracking-widest ${paymentMethod === 'online' ? 'text-indigo-600' : 'text-slate-900'}`}>💳 Online (Gateways)</p>
-                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight italic">Pay now via UPI or Card</p>
-                      </div>
-                      {paymentMethod === 'online' && <CheckCircle2 size={18} className="text-indigo-600" />}
-                    </div>
-
-                    {/* WALLET CARD */}
-                    <div
-                      onClick={() => setPaymentMethod('wallet')}
-                      className={`flex flex-col rounded-3xl border-2 transition-all relative overflow-hidden ${paymentMethod === 'wallet' ? 'border-indigo-600 bg-indigo-50/50 shadow-md translate-x-1' : 'border-slate-100 hover:border-slate-200 bg-white'}`}
-                    >
-                       <div className="flex items-center gap-4 p-5">
-                          <div className={`h-12 w-12 rounded-2xl flex items-center justify-center ${paymentMethod === 'wallet' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                            <Wallet size={24} />
-                          </div>
-                          <div className="flex-1">
-                             <div className="flex items-center justify-between mb-0.5">
-                                <p className={`text-[11px] font-black uppercase tracking-widest ${paymentMethod === 'wallet' ? 'text-indigo-600' : 'text-slate-900'}`}>👛 App Wallet</p>
-                                <div className="flex items-center gap-1">
-                                   <p className={`text-[10px] font-black italic ${isWalletInsufficient ? 'text-rose-500' : 'text-emerald-500'}`}>₹{loadingBalance ? '...' : walletBalance}</p>
-                                   {isWalletInsufficient ? (
-                                     <span className="bg-rose-100 text-rose-600 text-[7px] font-black px-1 py-0.5 rounded-sm uppercase tracking-tighter">
-                                       Low
-                                     </span>
-                                   ) : (
-                                     <span className="bg-emerald-100 text-emerald-600 text-[7px] font-black px-1 py-0.5 rounded-sm uppercase tracking-tighter">
-                                       OK
-                                     </span>
-                                   ) }
-                                </div>
-                             </div>
-                             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">Funds held in platform escrow</p>
-                          </div>
-                          {paymentMethod === 'wallet' && !isWalletInsufficient && <CheckCircle2 size={18} className="text-indigo-600" />}
+                {/* 🌌 UNIFIED JOURNEY SUMMARY */}
+                <div className="bg-gradient-to-br from-slate-900 to-indigo-950 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 h-40 w-40 bg-indigo-500/10 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/2 group-hover:bg-indigo-500/20 transition-all duration-700"></div>
+                  
+                  <div className="relative z-10 space-y-4">
+                    <div className="flex items-center justify-between">
+                       <span className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400/80 italic">Trip Registry</span>
+                       <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest text-emerald-400">
+                          <ShieldCheck size={10} /> Secure Protocol
                        </div>
-
-                       {/* Insufficient Balance Actions */}
-                       {paymentMethod === 'wallet' && isWalletInsufficient && (
-                         <div className="px-5 pb-5 pt-0">
-                            <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 flex flex-col gap-3">
-                               <p className="text-[9px] font-black text-rose-600 uppercase tracking-widest text-center italic">
-                                 Missing ₹{fare - walletBalance} for wallet payment
-                               </p>
-                               <button
-                                 onClick={(e) => {
-                                   e.stopPropagation();
-                                   setShowAddMoney(true);
-                                 }}
-                                 className="w-full bg-white border border-rose-200 text-rose-600 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-rose-50 transition-colors shadow-sm"
-                               >
-                                 <Plus size={14} /> Add Money to Wallet
-                               </button>
+                    </div>
+                    
+                    <div className="flex items-end justify-between gap-4">
+                      <div>
+                        <h3 className="text-4xl md:text-5xl font-black italic tracking-tighter leading-none">₹{fare}</h3>
+                        <p className="text-slate-400 text-[9px] font-black uppercase mt-1 tracking-widest">{ride?.from?.split(',')[0]} to {ride?.to?.split(',')[0]}</p>
+                      </div>
+                      <div className="text-right">
+                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 italic">Identity Verified</p>
+                         <div className="flex -space-x-2 justify-end">
+                            <div className="h-6 w-6 rounded-full border-2 border-slate-900 bg-indigo-600 flex items-center justify-center text-[8px] font-black">R</div>
+                            <div className="h-6 w-6 rounded-full border-2 border-slate-900 bg-emerald-600 flex items-center justify-center text-[8px] font-black leading-none">
+                               <CheckCircle2 size={10} />
                             </div>
                          </div>
-                       )}
+                      </div>
                     </div>
-
                   </div>
                 </div>
 
-                {/* Safety Shield */}
-                <div className="flex items-start gap-4 p-4 rounded-2xl bg-emerald-50 border border-emerald-100">
-                  <ShieldCheck className="text-emerald-600 shrink-0 mt-0.5" size={18} />
-                  <p className="text-[10px] font-black text-emerald-700 leading-relaxed uppercase tracking-tight italic opacity-80">
-                    Your trip is protected by RaidDosthi Safety Protocol. Verified identities and live tracking included.
+                {/* 💳 DYNAMIC PAYMENT GRID */}
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between px-2">
+                    <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-widest italic opacity-80">Select Settlement</h4>
+                    <span className="h-px flex-1 bg-slate-100 mx-4 opacity-50"></span>
+                    <p className="text-[9px] font-black text-indigo-500 uppercase tracking-widest italic">Fast & Secure</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    
+                    {/* 💰 CASH OPTION */}
+                    <div
+                      onClick={() => setPaymentMethod('cash')}
+                      className={`group relative p-6 rounded-[2rem] border-2 transition-all duration-300 cursor-pointer overflow-hidden active:scale-95 ${paymentMethod === 'cash' ? 'border-indigo-600 bg-indigo-50/20 shadow-xl' : 'border-slate-100 hover:border-slate-200 bg-white'}`}
+                    >
+                      <div className="flex items-start justify-between relative z-10">
+                        <div className={`h-12 w-12 rounded-2xl flex items-center justify-center transition-all duration-300 ${paymentMethod === 'cash' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-50 text-slate-400'}`}>
+                          <Banknote size={24} />
+                        </div>
+                        <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center transition-all ${paymentMethod === 'cash' ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-200'}`}>
+                           {paymentMethod === 'cash' && <CheckCircle2 size={12} />}
+                        </div>
+                      </div>
+                      <div className="mt-4 relative z-10">
+                        <p className={`text-xs font-black uppercase tracking-widest ${paymentMethod === 'cash' ? 'text-indigo-600' : 'text-slate-900'}`}>Manual Cash</p>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight italic mt-1 leading-tight">Settle directly upon arrival</p>
+                      </div>
+                      <div className="absolute -right-6 -bottom-6 opacity-[0.03] group-hover:scale-150 transition-transform duration-700 pointer-events-none">
+                         <Banknote size={80} />
+                      </div>
+                    </div>
+
+                    {/* ⚡ ONLINE OPTION */}
+                    <div
+                      onClick={() => setPaymentMethod('online')}
+                      className={`group relative p-6 rounded-[2rem] border-2 transition-all duration-300 cursor-pointer overflow-hidden active:scale-95 ${paymentMethod === 'online' ? 'border-indigo-600 bg-indigo-50/20 shadow-xl' : 'border-slate-100 hover:border-slate-200 bg-white'}`}
+                    >
+                      <div className="flex items-start justify-between relative z-10">
+                        <div className={`h-12 w-12 rounded-2xl flex items-center justify-center transition-all duration-300 ${paymentMethod === 'online' ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-50 text-slate-400'}`}>
+                          <CreditCard size={24} />
+                        </div>
+                        <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center transition-all ${paymentMethod === 'online' ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-200'}`}>
+                           {paymentMethod === 'online' && <CheckCircle2 size={12} />}
+                        </div>
+                      </div>
+                      <div className="mt-4 relative z-10">
+                        <div className="flex items-center gap-2">
+                           <p className={`text-xs font-black uppercase tracking-widest ${paymentMethod === 'online' ? 'text-indigo-600' : 'text-slate-900'}`}>Secure Cloud</p>
+                           <span className="bg-blue-100 text-blue-600 text-[6px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-widest leading-none">Hot</span>
+                        </div>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight italic mt-1 leading-tight">Pay instantly via UPI or Card</p>
+                      </div>
+                      <div className="absolute -right-6 -bottom-6 opacity-[0.03] group-hover:scale-150 transition-transform duration-700 pointer-events-none">
+                         <CreditCard size={80} />
+                      </div>
+                    </div>
+
+                    {/* 👛 WALLET OPTION - Full Width */}
+                    <div
+                      onClick={() => setPaymentMethod('wallet')}
+                      className={`md:col-span-2 group relative p-6 rounded-[2rem] border-2 transition-all duration-300 cursor-pointer overflow-hidden active:scale-95 ${paymentMethod === 'wallet' ? 'border-indigo-600 bg-indigo-50/20 shadow-xl' : 'border-slate-100 hover:border-slate-200 bg-white'}`}
+                    >
+                       <div className="flex items-center justify-between relative z-10">
+                          <div className="flex items-center gap-5">
+                             <div className={`h-12 w-12 rounded-2xl flex items-center justify-center transition-all duration-300 ${paymentMethod === 'wallet' ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-50 text-slate-400'}`}>
+                               <Wallet size={24} />
+                             </div>
+                             <div>
+                                <div className="flex items-center gap-3">
+                                   <p className={`text-xs font-black uppercase tracking-widest ${paymentMethod === 'wallet' ? 'text-indigo-600' : 'text-slate-900'}`}>Raider Wallet</p>
+                                   <p className={`text-[10px] font-black italic px-2 py-0.5 rounded-full ${isWalletInsufficient ? 'bg-rose-100 text-rose-500' : 'bg-emerald-100 text-emerald-500'}`}>
+                                      ₹{loadingBalance ? '...' : walletBalance}
+                                   </p>
+                                </div>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tight italic mt-0.5 leading-tight">100% Escrow Protection Protocol Applied</p>
+                             </div>
+                          </div>
+                          <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center transition-all ${paymentMethod === 'wallet' ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-200'}`}>
+                             {paymentMethod === 'wallet' && !isWalletInsufficient && <CheckCircle2 size={12} />}
+                          </div>
+                       </div>
+
+                       {paymentMethod === 'wallet' && isWalletInsufficient && (
+                         <div className="mt-4 animate-in slide-in-from-top-2 duration-300 relative z-10">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowAddMoney(true);
+                              }}
+                              className="w-full bg-slate-900 text-white py-4 rounded-2xl text-[9px] font-black uppercase tracking-[0.2em] flex items-center justify-center gap-3 hover:bg-indigo-600 transition-all shadow-xl"
+                            >
+                              <Plus size={14} strokeWidth={3} /> Recharge Registry Balance
+                            </button>
+                         </div>
+                       )}
+                       <div className="absolute -right-6 -bottom-6 opacity-[0.03] group-hover:scale-150 transition-transform duration-700 pointer-events-none">
+                         <Wallet size={80} />
+                       </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 🛡️ SECURITY BANNER */}
+                <div className="bg-slate-50 rounded-2xl p-4 flex items-center gap-3 opacity-60">
+                  <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></div>
+                  <p className="text-[8px] font-black text-slate-500 uppercase tracking-[0.1em] italic leading-tight">
+                    Funds for Online/Wallet are held by platform and only released after your OTP verification. SafeTransit™ Protocol Active.
                   </p>
                 </div>
 
-                {/* Confirm Button */}
+                {/* 🚀 BREATHING ACTION BUTTON */}
                 <button
                   onClick={handleCheckout}
                   disabled={isBooking || checkoutLoading || (paymentMethod === 'wallet' && isWalletInsufficient)}
-                  className="w-full bg-slate-900 hover:bg-indigo-600 text-white h-[72px] rounded-[1.8rem] font-black text-sm uppercase tracking-[0.25em] transition-all flex items-center justify-center gap-3 shadow-xl active:scale-95 disabled:opacity-50 group font-outfit"
+                  className="w-full relative h-20 rounded-[1.8rem] bg-slate-950 text-white overflow-hidden transition-all active:scale-95 disabled:opacity-30 group/btn shadow-[0_20px_40px_-10px_rgba(15,23,42,0.4)]"
                 >
-                  {isBooking || checkoutLoading ? (
-                    <Loader2 className="animate-spin" size={20} />
-                  ) : (
-                    <>
-                      <Sparkles size={20} className="group-hover:rotate-12 transition-transform" />
-                      {paymentMethod === 'online' ? 'INITIATE PAYMENT' : 'CONFIRM BOOKING'}
-                    </>
-                  )}
+                  <div className="absolute inset-0 bg-gradient-to-r from-indigo-600 via-blue-600 to-indigo-600 bg-[length:200%_100%] animate-shimmer opacity-0 group-hover/btn:opacity-100 transition-opacity duration-300"></div>
+                  
+                  <div className="relative z-10 flex flex-col items-center justify-center">
+                    {isBooking || checkoutLoading ? (
+                      <Loader2 className="animate-spin" size={20} />
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-3">
+                          <Sparkles size={16} className="text-indigo-400" />
+                          <span className="text-xs font-black uppercase tracking-[0.3em]">{paymentMethod === 'online' ? 'Enter Terminal' : 'Proceed to Registry'}</span>
+                          <ChevronRight size={16} className="opacity-40 group-hover/btn:translate-x-1 transition-transform" />
+                        </div>
+                        <p className="text-[7px] font-black opacity-30 mt-1 uppercase tracking-[0.5em] group-hover:opacity-60 transition-opacity">Authenticated Checkout</p>
+                      </>
+                    )}
+                  </div>
                 </button>
               </>
             ) : (

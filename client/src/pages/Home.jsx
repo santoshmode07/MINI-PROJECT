@@ -38,7 +38,7 @@ const Home = () => {
             <div className="bg-indigo-600 p-2 rounded-xl shadow-lg shadow-indigo-200 transform hover:rotate-12 transition-transform duration-300">
               <LayoutDashboard className="text-white h-5 w-5" />
             </div>
-            <span className="font-bold text-2xl tracking-tighter text-slate-800">Raid<span className="text-indigo-600">Dosthi</span></span>
+            <span className="font-bold text-2xl tracking-tighter text-slate-800">Ride<span className="text-indigo-600">Dosthi</span></span>
           </div>
 
           <div className="hidden lg:flex items-center gap-10">
@@ -283,7 +283,7 @@ const Home = () => {
                 <div className="bg-indigo-600 p-2 rounded-xl shadow-lg">
                   <LayoutDashboard className="text-white h-5 w-5" />
                 </div>
-                <span className="font-bold text-2xl tracking-tighter text-slate-800">Raid<span className="text-indigo-600">Dosthi</span></span>
+                <span className="font-bold text-2xl tracking-tighter text-slate-800">Ride<span className="text-indigo-600">Dosthi</span></span>
              </div>
              <p className="text-slate-500 font-medium leading-relaxed mb-10">Revolutionizing urban transit through verified community trust and shared journeys.</p>
              <div className="flex gap-4">
@@ -328,7 +328,7 @@ const Home = () => {
           </div>
         </div>
         <div className="max-w-7xl mx-auto px-6 mt-20 pt-10 border-t border-slate-50 text-center">
-           <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">© 2026 RaidDosthi Transit Systems. Handcrafted by Design Mavericks.</p>
+           <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">© 2026 RideDosthi Transit Systems. Handcrafted by Design Mavericks.</p>
         </div>
       </footer>
     </div>

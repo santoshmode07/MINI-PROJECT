@@ -1,14 +1,21 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
 import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
-import { Search, MapPin, ArrowRight, Sparkles, TrendingUp, Ban, AlertTriangle } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Search, MapPin, ArrowRight, Sparkles, TrendingUp, Ban, AlertTriangle, Star } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { useNotifications } from '../context/NotificationContext';
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { driverStats } = useNotifications();
+
+  React.useEffect(() => {
+    if (user?.role === 'admin') {
+      navigate('/admin');
+    }
+  }, [user, navigate]);
 
   const containerVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -41,9 +48,47 @@ const Dashboard = () => {
           <h1 className="text-5xl md:text-7xl font-black text-slate-900 tracking-tighter leading-none italic">
             Hello, <span className="text-indigo-600">{user?.name?.split(' ')[0]}</span>
           </h1>
-          <p className="text-slate-500 font-medium text-lg max-w-xl mx-auto italic">
+          <p className="text-slate-500 font-medium text-lg max-w-xl mx-auto italic mb-6">
             Where would you like to go today? Choose an option below to get started.
           </p>
+
+          {/* Priority Status Badge */}
+          {user?.priorityBadgeExpires && new Date(user.priorityBadgeExpires) > new Date() && (
+            <motion.div 
+               initial={{ opacity: 0, scale: 0.9, y: 10 }}
+               animate={{ opacity: 1, scale: 1, y: 0 }}
+               className="inline-flex items-center gap-6 bg-gradient-to-r from-slate-900 to-indigo-900 text-white p-6 rounded-[2.5rem] shadow-2xl shadow-indigo-200 border border-white/10 group overflow-hidden relative"
+            >
+               <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+               <div className="h-16 w-16 bg-indigo-600/30 backdrop-blur-md rounded-2xl flex items-center justify-center shrink-0 border border-white/10 group-hover:rotate-12 transition-transform duration-500">
+                  <Star fill="#818cf8" size={28} className="text-indigo-400" />
+               </div>
+               <div className="text-left">
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400 leading-none">Status: Priority Elite</p>
+                    <div className="h-1.5 w-10 bg-indigo-500 rounded-full animate-pulse"></div>
+                  </div>
+                  <h3 className="text-2xl font-black tracking-tight italic uppercase leading-none mb-2">Priority Passenger</h3>
+                  <p className="text-indigo-200/60 font-medium text-[10px] uppercase tracking-widest italic">
+                    Expiring: {new Date(user.priorityBadgeExpires).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </p>
+               </div>
+               <div className="hidden md:flex flex-col items-start gap-3 border-l border-white/10 pl-6 ml-4">
+                  <div className="space-y-1">
+                    <span className="text-[8px] font-black text-white/40 uppercase tracking-widest block italic">Active Advantage</span>
+                    <span className="text-[10px] font-black text-emerald-400 italic flex items-center gap-1">
+                      <TrendingUp size={10} /> AUTOMATIC JUSTICE SUBSIDY
+                    </span>
+                  </div>
+                  <Link 
+                    to="/priority-benefits" 
+                    className="flex items-center gap-2 text-[10px] font-black text-indigo-400 hover:text-white transition-colors uppercase tracking-[0.2em] group/link"
+                  >
+                    See Benefits <ArrowRight size={12} className="group-hover/link:translate-x-1 transition-transform" />
+                  </Link>
+               </div>
+            </motion.div>
+          )}
         </motion.div>
         
         {/* Account Restricted Status — JUSTICE SYTEM FEEDBACK */}

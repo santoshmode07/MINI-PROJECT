@@ -5,6 +5,7 @@ const { calculatePartialFare } = require('../utils/fareHelper');
 const Transaction = require('../models/Transaction');
 const mongoose = require('mongoose');
 const stripe = require('../config/stripe');
+const socketManager = require('../utils/socketManager');
 
 // @desc    Create Stripe Payment Intent for booking
 // @route   POST /api/bookings/checkout
@@ -165,7 +166,7 @@ exports.bookRide = async (req, res) => {
           type: 'RIDE_PAYMENT',
           amount: -fareCharged,
           rideId: ride._id,
-          description: `Ride booking to ${ride.to} held in escrow`
+          description: `Ride Payment - To ${ride.to} (Escrow Hold)`
         });
     } else if (paymentMethod === 'online') {
         // VERIFY STRIPE PAYMENT
@@ -193,23 +194,23 @@ exports.bookRide = async (req, res) => {
                     metadata: { paymentIntentId }
                 });
             }
+
+            // Log for Passenger Ledger (Completeness)
+            await Transaction.create({
+                userId: passenger._id,
+                type: 'RIDE_PAYMENT',
+                amount: -fareCharged,
+                rideId: ride._id,
+                description: `Ride Payment - To ${ride.to} (Online Hold)`,
+                metadata: { paymentIntentId }
+            });
+
             console.log(`[Escrow] 💳 Verified Stripe Payment ₹${fareCharged} from Passenger ${passenger.name}`);
         } catch (err) {
             return res.status(400).json({ success: false, message: 'Invalid payment verification' });
         }
     } else {
       console.log(`[Escrow] 💵 Ride booked via Cash. Commission debt will be settled at completion.`);
-    }
-
-    // Handle Priority Subsidy Transaction Record (Audit Trail only, no balance movement here)
-    if (isPriorityUser && admin) {
-      await Transaction.create({
-        userId: admin._id,
-        type: 'SUBSIDY',
-        amount: -systemSubsidy,
-        rideId,
-        description: `Justice Subsidy (Pending) - Ride ${rideId}`
-      });
     }
 
     const driverEarnings = Math.floor(originalFare * 0.8);
@@ -259,6 +260,34 @@ exports.bookRide = async (req, res) => {
       passengerId: req.user._id
     });
 
+    // STEP 10 — Real Time Updates
+    socketManager.emitToRide(rideId, 'seat_updated', {
+        rideId,
+        seatsAvailable: updatedRide.seatsAvailable,
+        totalSeats: ride.seatsAvailable + ride.bookings.length // Approximate 
+    });
+
+    socketManager.emitToUser(ride.driver, 'new_booking_received', {
+        rideId: ride._id,
+        passengerName: req.user.name,
+        passengerGender: req.user.gender,
+        fareAmount: fareCharged,
+        boardingPoint: ride.from
+    });
+
+    // Also trigger global notification update for UI
+    const unreadCount = await Notification.countDocuments({ user: ride.driver, isRead: false });
+    socketManager.emitToUser(ride.driver, 'new_notification', {
+        notification: {
+            title: 'New Booking!',
+            message: `${req.user.name} has joined your ride to ${ride.to}`,
+            type: 'NEW_BOOKING',
+            rideId: ride._id,
+            createdAt: new Date()
+        },
+        unreadCount
+    });
+
     res.status(201).json({
         success: true,
         message: 'Ride booked successfully',
@@ -290,11 +319,11 @@ exports.getMyBookings = async (req, res) => {
           passenger: req.user._id,
           status: 'confirmed'
         }
-      },
-      date: { $gte: new Date().setHours(0,0,0,0) } // Upcoming or today
+      }
     })
     .populate('driver', 'name averageRating isVerified profilePhoto phone')
-    .select('from to date time carModel carNumber price seatsAvailable status bookings driver');
+    .select('from to date time carModel carNumber price seatsAvailable status bookings driver')
+    .lean();
 
     const myBookings = rides.map(ride => {
       const myBooking = ride.bookings.find(
@@ -383,33 +412,57 @@ exports.cancelBooking = async (req, res) => {
       });
     }
 
-    // STEP 6 — Escrow Refund Logic
-    const userBooking = ride.bookings.find(b => b.passenger.toString() === req.user._id.toString() && b.status === 'confirmed');
+    // STEP 6 — Escrow Refund Logic (TREASURY RELEASE)
+    // We fetch the ride AGAIN to be absolutely sure we have the correct booking state
+    const rideWithBooking = await Ride.findById(rideId);
+    const userBooking = rideWithBooking?.bookings.find(b => b.passenger.toString() === req.user._id.toString());
+    
     if (userBooking && (userBooking.paymentMethod === 'online' || userBooking.paymentMethod === 'wallet')) {
+       console.log(`[Escrow] 🔄 Initializing Release: ₹${userBooking.fareCharged} (${userBooking.paymentMethod}) for Passenger ${req.user.name}`);
+       
        const admin = await User.findOne({ role: 'admin' });
-       
-       req.user.walletBalance += userBooking.fareCharged;
-       if (admin) {
-         admin.walletBalance -= userBooking.fareCharged;
-         await Transaction.create({
-           userId: admin._id,
-           type: 'ESCROW_RELEASE',
-           amount: -userBooking.fareCharged,
-           rideId: ride._id,
-           description: `Escrow Refund: Cancellation by ${req.user.name}`
-         });
-         await admin.save();
+       const refundAmount = userBooking.fareCharged || 0;
+
+       if (refundAmount > 0) {
+          // 1. Credit Passenger Wallet
+          const passenger = await User.findById(req.user._id);
+          if (passenger) {
+             passenger.walletBalance += refundAmount;
+             await passenger.save();
+             
+             await Transaction.create({
+               userId: passenger._id,
+               type: 'REFUND',
+               amount: refundAmount,
+               rideId: ride._id,
+               description: `Refund - Cancelled ride to ${ride.to}`
+             });
+          }
+          
+          // 2. Debit Admin Wallet (Release from Escrow)
+          if (admin) {
+             admin.walletBalance -= refundAmount;
+             await admin.save();
+             
+             await Transaction.create({
+               userId: admin._id,
+               type: 'ESCROW_RELEASE',
+               amount: -refundAmount,
+               rideId: ride._id,
+               description: `Escrow Release: Refunded ₹${refundAmount} to Passenger ${passenger?.name || 'User'}`,
+               metadata: {
+                  event: 'CANCELLATION',
+                  originalHoldAmount: refundAmount,
+                  refundRecipient: passenger?._id
+               }
+             });
+             console.log(`[Escrow] ✅ Synergy Ledger Updated: ESCROW_RELEASE recorded for admin.`);
+          }
+       } else {
+          console.log(`[Escrow] ℹ️ Skipping Release: fareCharged was 0.`);
        }
-       await req.user.save();
-       
-       await Transaction.create({
-         userId: req.user._id,
-         type: 'REFUND',
-         amount: userBooking.fareCharged,
-         rideId: ride._id,
-         description: `Refund - Cancelled ride to ${ride.to}`
-       });
-       console.log(`[Escrow] 🔄 Refunded ₹${userBooking.fareCharged} to Passenger ${req.user.name}`);
+    } else {
+       console.log(`[Escrow] ℹ️ No refund required for this booking method or booking not found.`);
     }
 
     // STEP 7 — Notify Driver
@@ -417,9 +470,28 @@ exports.cancelBooking = async (req, res) => {
       user: ride.driver,
       type: 'BOOKING_CANCELLED',
       title: 'Booking Cancelled',
-      message: `${req.user.name} cancelled their booking for your ride to ${updatedRide.to}`,
-      rideId: updatedRide._id,
+      message: `${req.user.name} cancelled their booking for your ride to ${ride.to}`,
+      rideId: ride._id,
       passengerId: req.user._id
+    });
+
+    // STEP 8 — Real Time Updates
+    socketManager.emitToRide(rideId, 'seat_updated', {
+        rideId,
+        seatsAvailable: updatedRide.seatsAvailable,
+        totalSeats: ride.seatsAvailable + ride.bookings.length // Approximate
+    });
+
+    const unreadCount = await Notification.countDocuments({ user: ride.driver, isRead: false });
+    socketManager.emitToUser(ride.driver, 'new_notification', {
+        notification: {
+            title: 'Booking Cancelled',
+            message: `${req.user.name} cancelled their booking for your ride to ${ride.to}`,
+            type: 'BOOKING_CANCELLED',
+            rideId: ride._id,
+            createdAt: new Date()
+        },
+        unreadCount
     });
 
     res.status(200).json({

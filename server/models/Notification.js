@@ -49,6 +49,10 @@ const notificationSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// Optimization Indexes
+notificationSchema.index({ user: 1, createdAt: -1 });
+notificationSchema.index({ user: 1, isRead: 1 });
+
 // Auto-delete notifications older than 30 days (optional but good for cleanup)
 // Or we can just keep last 10 as requested in the MISSION but history might be useful.
 // The MISSION says "Keep last 10 notifications". 

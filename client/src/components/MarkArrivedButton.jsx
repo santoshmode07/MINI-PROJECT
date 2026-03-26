@@ -7,7 +7,7 @@ import {
 import api from '../api/axios';
 import { toast } from 'react-toastify';
 
-const MarkArrivedButton = ({ rideId, departureTime, verifiedCount, totalCount, onComplete }) => {
+const MarkArrivedButton = ({ rideId, departureTime, rideDate, waitingTime, verifiedCount, totalCount, onComplete }) => {
   const [loading, setLoading] = useState(false);
   const [timeLeft, setTimeLeft] = useState(null);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -16,11 +16,12 @@ const MarkArrivedButton = ({ rideId, departureTime, verifiedCount, totalCount, o
   useEffect(() => {
     const calculateTime = () => {
       const now = new Date();
-      // Departure + 20 min
-      const [hours, minutes] = departureTime.split(':');
-      const startOfDay = new Date();
-      startOfDay.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-      const availableTime = new Date(startOfDay.getTime() + 2 * 60 * 1000);
+      // Use rideDate and departureTime to get the exact start time
+      const dateStr = new Date(rideDate).toISOString().split('T')[0];
+      const startAt = new Date(`${dateStr}T${departureTime}`);
+      
+      // availableTime is departureTime + waitingTime
+      const availableTime = new Date(startAt.getTime() + (waitingTime || 10) * 60 * 1000);
       
       const diff = Math.max(0, Math.floor((availableTime - now) / 1000));
       setTimeLeft(diff);
@@ -29,7 +30,7 @@ const MarkArrivedButton = ({ rideId, departureTime, verifiedCount, totalCount, o
     calculateTime();
     const interval = setInterval(calculateTime, 1000);
     return () => clearInterval(interval);
-  }, [departureTime]);
+  }, [departureTime, rideDate, waitingTime]);
 
   const handleMarkArrived = async () => {
     setLoading(true);
@@ -69,14 +70,14 @@ const MarkArrivedButton = ({ rideId, departureTime, verifiedCount, totalCount, o
               <CheckCircle2 size={42} />
            </div>
            <div>
-              <h2 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic">Journey Finished!</h2>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Ledger update successful.</p>
+              <h2 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic">Syndicate Journey Started! 🚀</h2>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Registry locked. Safe travels, Raider.</p>
            </div>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 relative z-10">
            <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100 flex flex-col items-center">
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">Boarded</p>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 leading-none">On Board</p>
               <p className="text-xl font-black text-slate-800 italic uppercase">{summary.verifiedCount} Pk</p>
            </div>
            
@@ -104,7 +105,7 @@ const MarkArrivedButton = ({ rideId, departureTime, verifiedCount, totalCount, o
 
         <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-center gap-3">
            <Clock size={16} className="text-emerald-500 animate-spin" />
-           <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Returning to dashboard in 5s...</p>
+           <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Returning to Fleet in 5s...</p>
         </div>
      </motion.div>
   );
@@ -121,7 +122,7 @@ const MarkArrivedButton = ({ rideId, departureTime, verifiedCount, totalCount, o
             <div className="absolute inset-0 bg-slate-200/40 backdrop-blur-sm flex items-center justify-center z-10">
                 <div className="flex items-center gap-2 bg-white px-4 py-1.5 rounded-full border border-slate-200 shadow-sm animate-pulse">
                    <Lock size={12} className="text-slate-400" />
-                   <span className="text-slate-800 text-[9px] tabular-nums tracking-widest font-black">ACTIVE IN {formatTime(timeLeft)}</span>
+                   <span className="text-slate-800 text-[9px] tabular-nums tracking-widest font-black">START AT {formatTime(timeLeft)}</span>
                 </div>
             </div>
           )}
@@ -131,14 +132,14 @@ const MarkArrivedButton = ({ rideId, departureTime, verifiedCount, totalCount, o
                 {timeLeft > 0 ? <Clock size={18} /> : <CheckCircle2 size={20} className="animate-pulse" />}
              </div>
              <div className="text-left leading-none">
-                <p className="text-[8px] font-black opacity-60 uppercase mb-0.5 tracking-widest">Finalization</p>
-                <p className="text-sm md:text-base font-black italic tracking-tight uppercase">Mark Journey as Arrived</p>
+                <p className="text-[8px] font-black opacity-60 uppercase mb-0.5 tracking-widest">Boarding Phase</p>
+                <p className="text-sm md:text-base font-black italic tracking-tight uppercase">Finalize & Start Journey</p>
              </div>
           </div>
           
           <div className="hidden md:flex items-center gap-4 relative z-10 pr-2 italic">
              <div className="text-right leading-none">
-                <p className="text-[8px] font-black opacity-60 uppercase mb-0.5 tracking-widest">Verified</p>
+                <p className="text-[8px] font-black opacity-60 uppercase mb-0.5 tracking-widest">Onboarded</p>
                 <p className="text-base font-black">{verifiedCount} / {totalCount}</p>
              </div>
              <ChevronRight size={18} className="opacity-40 group-hover/btn:translate-x-1 transition-transform" />
@@ -162,12 +163,12 @@ const MarkArrivedButton = ({ rideId, departureTime, verifiedCount, totalCount, o
              >
                 <div className="flex flex-col items-center text-center space-y-8 relative z-10">
                    <div className="h-16 w-16 bg-slate-900 text-white rounded-[1.5rem] flex items-center justify-center rotate-3 border-4 border-white shadow-xl">
-                      <Lock size={28} />
+                      <CheckCircle2 size={28} />
                    </div>
                    
                    <div>
-                      <h3 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic leading-none mb-2 underline decoration-indigo-500 decoration-4 underline-offset-8">Confirm Arrival.</h3>
-                      <p className="text-slate-500 font-bold italic text-sm mt-4">You are starting the journey with the following ledger summary:</p>
+                      <h3 className="text-3xl font-black text-slate-800 tracking-tighter uppercase italic leading-none mb-2 underline decoration-emerald-500 decoration-4 underline-offset-8">Start Trip Now?</h3>
+                      <p className="text-slate-500 font-bold italic text-sm mt-4">You are about to start the travel phase with:</p>
                    </div>
 
                    <div className="w-full grid grid-cols-2 gap-4">

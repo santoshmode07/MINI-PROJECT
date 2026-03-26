@@ -2,6 +2,7 @@ const stripe = require('../config/stripe');
 const User = require('../models/User');
 const Transaction = require('../models/Transaction');
 const Payout = require('../models/Payout');
+const socketManager = require('../utils/socketManager');
 
 // @desc    Create Stripe Payment Intent for top-up
 // @route   POST /api/payments/topup/intent
@@ -118,6 +119,16 @@ exports.handleWebhook = async (req, res) => {
 
         if (updatedUser) {
           console.log(`[Stripe Webhook] 🎉 Wallet Successfully Credited. New Balance: ₹${updatedUser.walletBalance}`);
+          
+          // Real Time Update
+          socketManager.emitToUser(userId, 'wallet_updated', {
+              newBalance: updatedUser.walletBalance,
+              transaction: {
+                  type: 'credit',
+                  amount: amountRupees,
+                  description: 'Wallet top up via Stripe'
+              }
+          });
         } else {
           console.log(`[Stripe Webhook] ❌ FAILED: User ${userId} could not be found to credit balance.`);
         }
@@ -304,6 +315,19 @@ exports.updatePayoutStatus = async (req, res) => {
     }
 
     await payout.save();
+
+    // Real Time Update for User
+    const user = await User.findById(payout.userId);
+    if (user) {
+        socketManager.emitToUser(user._id, 'wallet_updated', {
+            newBalance: user.walletBalance,
+            transaction: {
+                type: status === 'rejected' ? 'credit' : 'debit',
+                amount: payout.amount,
+                description: `Withdrawal ${status}`
+            }
+        });
+    }
 
     res.status(200).json({
       success: true,

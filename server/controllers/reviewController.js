@@ -90,14 +90,24 @@ exports.createReview = async (req, res) => {
 // @access  Public
 exports.getUserReviews = async (req, res) => {
   try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const total = await Review.countDocuments({ subject: req.params.userId });
     const reviews = await Review.find({ subject: req.params.userId })
-      .populate('reviewer', 'name profilePhoto avatar')
-      .sort({ createdAt: -1 });
+      .populate('reviewer', 'name profilePhoto')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
     res.status(200).json({
       success: true,
-      count: reviews.length,
-      data: reviews
+      reviews,
+      currentPage: page,
+      totalPages: Math.ceil(total / limit),
+      totalReviews: total,
+      hasMore: page < Math.ceil(total / limit)
     });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Server Error' });

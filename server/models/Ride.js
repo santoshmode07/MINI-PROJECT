@@ -94,7 +94,7 @@ const rideSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['available', 'full', 'completed', 'cancelled'],
+    enum: ['available', 'full', 'ongoing', 'completed', 'cancelled'],
     default: 'available'
   },
   simplifiedFrom: {
@@ -176,7 +176,19 @@ const rideSchema = new mongoose.Schema({
       default: 'pending'
     },
     moneyReleased: { type: Boolean, default: false },
-    refundProcessed: { type: Boolean, default: false }
+    refundProcessed: { type: Boolean, default: false },
+    // Safe Dropoff Fields
+    dropoffStatus: {
+      type: String,
+      enum: ['pending', 'dropped', 'confirmed', 'disputed', 'auto_released', 'refunded'],
+      default: 'pending'
+    },
+    driverDroppedAt: { type: Date, default: null },
+    passengerConfirmedAt: { type: Date, default: null },
+    autoReleaseAt: { type: Date, default: null },
+    fareReleased: { type: Boolean, default: false },
+    disputeRaised: { type: Boolean, default: false },
+    disputeRaisedAt: { type: Date, default: null }
   }],
   boardingStartedAt: { type: Date, default: null },
   journeyStartedAt: { type: Date, default: null },
@@ -209,6 +221,12 @@ rideSchema.index({ routePoints:      '2dsphere' });
 rideSchema.index({ fromCoordinates:  '2dsphere' });
 rideSchema.index({ toCoordinates:    '2dsphere' });
 rideSchema.index({ from: 'text', to: 'text' });
+rideSchema.index({ status: 1, date: 1 });
+rideSchema.index({ driver: 1, status: 1 });
+rideSchema.index({ status: 1, expiresAt: 1, driverGender: 1 });
+rideSchema.index({ status: 1, expiresAt: 1 });
+rideSchema.index({ status: 1, date: 1, time: 1 });
+rideSchema.index({ 'bookings.passenger': 1 });
 
 const Ride = mongoose.model('Ride', rideSchema);
 

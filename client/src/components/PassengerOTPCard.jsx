@@ -13,9 +13,9 @@ const PassengerOTPCard = ({ passenger, rideId, onVerified, windowClosed }) => {
   const [error, setError] = useState('');
   const [remainingAttempts, setRemainingAttempts] = useState(null);
 
-  const handleVerify = async (e) => {
-    e && e.preventDefault();
-    if (otp.length !== 6) return;
+  const handleVerify = async (manualOtp) => {
+    const otpToVerify = typeof manualOtp === 'string' ? manualOtp : otp;
+    if (otpToVerify.length !== 6) return;
     if (windowClosed) {
       toast.error("Boarding window closed");
       return;
@@ -24,7 +24,11 @@ const PassengerOTPCard = ({ passenger, rideId, onVerified, windowClosed }) => {
     setLoading(true);
     setError('');
     try {
-      const { data } = await api.post('/otp/verify', { rideId, otp });
+      const { data } = await api.post('/otp/verify', { 
+        rideId, 
+        bookingId: passenger.bookingId, 
+        otp: otpToVerify 
+      });
       if (data.success) {
         toast.success(`Verified: ${data.data.name}`);
         onVerified && onVerified();
@@ -46,8 +50,7 @@ const PassengerOTPCard = ({ passenger, rideId, onVerified, windowClosed }) => {
     const val = e.target.value.replace(/\D/g, '').slice(0, 6);
     setOtp(val);
     if (val.length === 6) {
-        // Auto-verify when 6 digits entered
-        handleVerify();
+        handleVerify(val);
     }
   };
 
@@ -67,9 +70,16 @@ const PassengerOTPCard = ({ passenger, rideId, onVerified, windowClosed }) => {
         {/* Passenger Info */}
         <div className="flex items-center gap-5 w-full md:w-auto">
           {passenger.profilePhoto ? (
-            <img src={passenger.profilePhoto} className="h-20 w-20 rounded-[2rem] object-cover border-2 border-white shadow-xl rotate-3 group-hover:rotate-0 transition-transform" />
+            <div className="h-20 w-20 rounded-[2rem] bg-white border-4 border-white shadow-2xl rotate-3 group-hover:rotate-0 transition-all duration-500 overflow-hidden ring-8 ring-slate-50/50">
+               <img 
+                 src={passenger.profilePhoto} 
+                 className="h-full w-full object-cover hd-profile" 
+                 loading="eager"
+                 decoding="async"
+               />
+            </div>
           ) : (
-            <div className="h-20 w-20 rounded-[2rem] bg-indigo-600 flex items-center justify-center text-white text-3xl font-black italic border-2 border-white shadow-xl rotate-3 group-hover:rotate-0 transition-transform uppercase">
+            <div className="h-20 w-20 rounded-[2rem] bg-indigo-600 flex items-center justify-center text-white text-3xl font-black italic border-4 border-white shadow-2xl rotate-3 group-hover:rotate-0 transition-all duration-500 uppercase ring-8 ring-slate-50/50">
                {passenger.name[0]}
             </div>
           )}
@@ -117,9 +127,9 @@ const PassengerOTPCard = ({ passenger, rideId, onVerified, windowClosed }) => {
                  </div>
               </div>
            ) : (
-             <form onSubmit={handleVerify} className="relative">
-                <div className="flex items-center bg-slate-50 border-2 border-slate-200 rounded-[2rem] overflow-hidden focus-within:border-indigo-600 focus-within:bg-white transition-all shadow-sm">
-                   <div className="pl-6 text-slate-300"><ShieldCheck size={24} /></div>
+             <form onSubmit={(e) => { e.preventDefault(); handleVerify(); }} className="relative">
+                <div className={`flex items-center bg-slate-50 border-2 rounded-[2rem] overflow-hidden transition-all shadow-sm ${error ? 'border-rose-500 bg-rose-50/10' : 'border-slate-200 focus-within:border-indigo-600 focus-within:bg-white'}`}>
+                   <div className={`pl-6 ${error ? 'text-rose-400' : 'text-slate-300'}`}><ShieldCheck size={24} /></div>
                    <input 
                      type="text" 
                      placeholder="ENTER 6-DIGIT PASSENGER OTP"
@@ -131,14 +141,14 @@ const PassengerOTPCard = ({ passenger, rideId, onVerified, windowClosed }) => {
                    <button 
                      type="submit"
                      disabled={loading || otp.length !== 6}
-                     className="bg-indigo-600 hover:bg-slate-900 text-white px-8 py-6 font-black text-[10px] uppercase tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed group/btn"
+                     className={`px-8 py-6 font-black text-[10px] uppercase tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed group/btn ${error ? 'bg-rose-500 hover:bg-rose-600' : 'bg-indigo-600 hover:bg-slate-900'} text-white`}
                    >
                      {loading ? <Loader2 className="animate-spin" size={16} /> : <span className="group-hover/btn:translate-x-1 inline-block transition-transform whitespace-nowrap">Verify Now</span>}
                    </button>
                 </div>
                 {error && (
-                   <div className="absolute top-full left-0 mt-2 flex items-center gap-2 text-rose-500 font-black italic text-[10px] uppercase tracking-wider pl-4">
-                      <AlertTriangle size={12} /> {error}
+                   <div className="mt-2 flex items-center justify-center gap-2 text-rose-500 font-black italic text-[11px] uppercase tracking-widest text-center">
+                      <AlertTriangle size={14} className="animate-pulse" /> {error}
                    </div>
                 )}
              </form>

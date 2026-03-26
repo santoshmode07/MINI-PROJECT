@@ -4,6 +4,7 @@ const Review = require('../models/Review');
 const Notification = require('../models/Notification');
 const Transaction = require('../models/Transaction');
 const { haversineDistance, calculatePartialFare } = require('../utils/fareHelper');
+const socketManager = require('../utils/socketManager');
 
 // @desc    Complete a ride (Driver only)
 // @route   PATCH /api/rides/:id/complete
@@ -303,7 +304,7 @@ exports.startCronJobs = () => {
             otp: null
           }
         }
-      });
+      }).limit(100);
 
       for (const ride of ridesToProcess) {
           const dateStr = ride.date.toISOString().split('T')[0];
@@ -325,6 +326,13 @@ exports.startCronJobs = () => {
                           title: '🔐 Your boarding OTP is ready!',
                           message: `Open My Bookings to view it. Valid from now until boarding closes.`,
                           rideId: ride._id
+                      });
+
+                      // Real Time Update
+                      socketManager.emitToUser(booking.passenger, 'otp_ready', {
+                          rideId: ride._id,
+                          otp: booking.otp,
+                          message: "Your boarding OTP is ready"
                       });
                   }
               }
@@ -349,7 +357,7 @@ exports.startCronJobs = () => {
           status: { $in: ['available', 'full'] },
           markArrivedAvailableAt: { $lt: now },
           journeyStartedAt: null
-      });
+      }).limit(100);
 
       if (expiredRides.length === 0) return;
 
@@ -369,6 +377,12 @@ exports.startCronJobs = () => {
               ride.markModified('bookings');
               await ride.save();
               console.log(`[Cron-Refund] 🔄 Processed ${processedCount} auto-refunds for Ride ${ride._id}`);
+              
+              // Real Time Update
+              socketManager.emitToRide(ride._id, 'ride_expired', {
+                  rideId: ride._id,
+                  message: "This ride has expired"
+              });
           }
       }
     } catch (err) {
@@ -376,13 +390,69 @@ exports.startCronJobs = () => {
     }
   };
 
+  // PART 5: Auto Release Cron Job
+  const processAutoRelease = async () => {
+    try {
+      const now = new Date();
+      // Find rides that have bookings in 'dropped' status waiting for auto-release
+      const ridesToProcess = await Ride.find({
+        status: 'ongoing',
+        'bookings': {
+          $elemMatch: {
+            dropoffStatus: 'dropped',
+            fareReleased: false,
+            disputeRaised: false,
+            autoReleaseAt: { $lt: now }
+          }
+        }
+      }).limit(100);
+
+      if (ridesToProcess.length === 0) return;
+
+      const { releaseFareToDriver } = require('./dropoffController');
+
+      for (const ride of ridesToProcess) {
+          let processedCount = 0;
+          for (const booking of ride.bookings) {
+              if (booking.dropoffStatus === 'dropped' && 
+                  !booking.fareReleased && 
+                  !booking.disputeRaised && 
+                  booking.autoReleaseAt < now) {
+                  
+                  await releaseFareToDriver(booking, ride, 'auto');
+                  booking.dropoffStatus = 'auto_released';
+                  processedCount++;
+
+                  // Notify Passenger
+                  await Notification.create({
+                    user: booking.passenger,
+                    type: 'RIDE_MISSED', // Reuse appropriate type or use JOURNEY_STARTED
+                    title: '⏰ Payment Auto-Released',
+                    message: `Auto release: Your confirmation window passed. Fare released to your driver.`,
+                    rideId: ride._id
+                  });
+              }
+          }
+          if (processedCount > 0) {
+              ride.markModified('bookings');
+              await ride.save();
+              console.log(`[Cron-Dropoff] ⏰ Auto-released ${processedCount} fares for Ride ${ride._id}`);
+          }
+      }
+    } catch (err) {
+      console.error(`[Cron-Dropoff] Error: ${err.message}`);
+    }
+  };
+
   // Run immediately on boot
   generateOTPs();
   processAutoRefunds();
+  processAutoRelease();
 
   // Set intervals
-  setInterval(generateOTPs, 45 * 1000);
+  setInterval(generateOTPs, 60 * 1000);
   setInterval(processAutoRefunds, 60 * 1000);
+  setInterval(processAutoRelease, 60 * 1000);
 };
 
 // Helper: Get route from OSRM (completely free, no API key)
@@ -600,7 +670,6 @@ exports.getAllRides = async (req, res) => {
 
       // Boarding Radius: Find rides that pass within 35km of passenger
       const gpsCandidates = await Ride.find({
-        ...query,
         ...genderQuery,
         routePoints: {
           $near: {
@@ -608,7 +677,10 @@ exports.getAllRides = async (req, res) => {
             $maxDistance: 35000 
           }
         }
-      }).populate('driver', 'name averageRating trustScore isVerified profilePhoto phone');
+      })
+      .populate('driver', 'name averageRating trustScore isVerified profilePhoto gender')
+      .select('from to date time seatsAvailable price driverGender genderPreference status expiresAt driver fromCoordinates toCoordinates routePoints routePointsStatus bookings')
+      .lean();
 
       // Filter by: 1. Passes near Destination, 2. Source is before Destination in route
       const matchedByGPS = gpsCandidates.filter(ride => {
@@ -702,7 +774,10 @@ exports.getAllRides = async (req, res) => {
            { to: { $regex: cleanTo.split(' ')[0], $options: 'i' } }, // Fuzzy head word
            { simplifiedTo: { $regex: cleanTo, $options: 'i' } }
          ]
-       }).populate('driver', 'name averageRating trustScore isVerified profilePhoto phone');
+       })
+       .populate('driver', 'name averageRating trustScore isVerified profilePhoto gender')
+       .select('from to date time seatsAvailable price driverGender genderPreference status expiresAt driver fromCoordinates toCoordinates routePoints routePointsStatus bookings')
+       .lean();
 
        console.log(`[RideSearch] Phase B: Found ${textCandidates.length} matches.`);
        CandidatePool.push(...textCandidates);
@@ -712,8 +787,10 @@ exports.getAllRides = async (req, res) => {
     if (!to || to === 'null' || to.trim() === '') {
        console.log(`[RideSearch] Phase C: Destination empty - browsing all.`);
        const allAvailable = await Ride.find({ ...query, ...genderQuery })
-         .populate('driver', 'name averageRating trustScore isVerified profilePhoto phone')
-         .limit(50);
+         .populate('driver', 'name averageRating trustScore isVerified profilePhoto gender')
+         .select('from to date time seatsAvailable price driverGender genderPreference status expiresAt driver fromCoordinates toCoordinates routePoints routePointsStatus bookings')
+         .limit(50)
+         .lean();
        CandidatePool.push(...allAvailable);
     }
 
@@ -759,7 +836,7 @@ exports.getAllRides = async (req, res) => {
       // 3. REAL BENEFIT: Priority Match (Identifying top 10% of drivers)
       const isPriorityMatch = isPriorityUser && (ride.driver?.trustScore >= 90);
 
-      const rideObj = ride.toObject();
+      const rideObj = ride;
 
       // Mask driver sensitive info
       if (rideObj.driver) {
