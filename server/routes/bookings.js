@@ -4,9 +4,17 @@ const {
   bookRide, 
   getMyBookings, 
   cancelBooking, 
-  getPassengerList 
+  getPassengerList,
+  createBookingIntent
 } = require('../controllers/bookingController');
 const { protect } = require('../middleware/authMiddleware');
+
+/**
+ * @route   POST /api/bookings/checkout
+ * @desc    Get Stripe Payment Intent for booking
+ * @access  Private
+ */
+router.post('/checkout', protect, createBookingIntent);
 
 /**
  * @route   POST /api/bookings

@@ -22,13 +22,18 @@ const reviewSchema = new mongoose.Schema({
     required: [true, 'Please add a comment'],
     trim: true,
     maxlength: 500
+  },
+  rideId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Ride',
+    required: true
   }
 }, {
   timestamps: true
 });
 
-// Prevent user from submitting more than one review per person (optional, can be refined)
-reviewSchema.index({ reviewer: 1, subject: 1 }, { unique: true });
+// Prevent user from submitting more than one review per person per ride
+reviewSchema.index({ reviewer: 1, subject: 1, rideId: 1 }, { unique: true });
 
 // Static method to get avg rating and save
 reviewSchema.statics.getAverageRating = async function(userId) {

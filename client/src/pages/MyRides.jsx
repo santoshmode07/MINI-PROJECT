@@ -5,7 +5,7 @@ import {
   Car, Calendar, Clock, MapPin, Users, ChevronRight, 
   AlertCircle, CheckCircle2, XCircle, ArrowRight,
   Plus, Loader2, Trash2, ShieldCheck, Timer,
-  Shield, Mail, Ban, AlertTriangle
+  Shield, Mail, Ban, AlertTriangle, DollarSign, Wallet
 } from 'lucide-react';
 import api from '../api/axios';
 import Navbar from '../components/Navbar';
@@ -257,19 +257,30 @@ const RideCard = ({ ride, onCancel, isPast }) => {
     if (isPast) return;
     const interval = setInterval(() => {
       const now = new Date();
+      // Parse departure time
+      const [hours, minsPart] = ride.time.split(':');
+      const departure = new Date(ride.date);
+      departure.setHours(parseInt(hours), parseInt(minsPart), 0, 0);
+      
       const expiry = new Date(ride.expiresAt);
-      const diff = expiry - now;
-
-      if (diff <= 0) {
-        setTimeLeft('EXPIRED');
-      } else {
+      
+      if (now < departure) {
+        const diff = departure - now;
         const mins = Math.floor(diff / 60000);
         const secs = Math.floor((diff % 60000) / 1000);
-        setTimeLeft(`${mins}m ${secs}s left`);
+        if (mins > 0) {
+          setTimeLeft(`${mins}m ${secs}s left`);
+        } else {
+          setTimeLeft(`${secs}s left`);
+        }
+      } else if (now < expiry) {
+        setTimeLeft('BOARDING');
+      } else {
+        setTimeLeft('EXPIRED');
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [ride.expiresAt, isPast]);
+  }, [ride.date, ride.time, ride.expiresAt, isPast]);
 
   const getStatusBadge = (status) => {
     const styles = {

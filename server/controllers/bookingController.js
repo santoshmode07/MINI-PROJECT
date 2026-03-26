@@ -2,13 +2,61 @@ const Ride = require('../models/Ride');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { calculatePartialFare } = require('../utils/fareHelper');
+const Transaction = require('../models/Transaction');
+const mongoose = require('mongoose');
+const stripe = require('../config/stripe');
+
+// @desc    Create Stripe Payment Intent for booking
+// @route   POST /api/bookings/checkout
+// @access  Private
+exports.createBookingIntent = async (req, res) => {
+  try {
+    const { rideId, dropoffCoordinates } = req.body;
+    
+    // 1. Validate ride
+    const ride = await Ride.findById(rideId);
+    if (!ride) return res.status(404).json({ success: false, message: 'Ride not found' });
+    if (ride.status !== 'available' || ride.seatsAvailable < 1) {
+      return res.status(400).json({ success: false, message: 'No seats available' });
+    }
+
+    // 2. Calculate fare
+    let initialFare = calculatePartialFare(
+      ride.fromCoordinates.coordinates,
+      ride.toCoordinates.coordinates,
+      dropoffCoordinates,
+      ride.price
+    );
+    const isPriorityUser = req.user.priorityBadgeExpires && new Date(req.user.priorityBadgeExpires) > new Date();
+    let fareCharged = isPriorityUser ? Math.floor(initialFare * 0.9) : initialFare;
+
+    // 3. Create Stripe Payment Intent
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: fareCharged * 100, // paise
+      currency: 'inr',
+      metadata: {
+        userId: req.user._id.toString(),
+        rideId: ride._id.toString(),
+        type: 'ride_booking'
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      clientSecret: paymentIntent.client_secret,
+      fare: fareCharged
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
 
 // @desc    Book a ride
 // @route   POST /api/bookings
 // @access  Private
 exports.bookRide = async (req, res) => {
   try {
-    const { rideId, boardingAddress, boardingCoordinates, dropoffAddress, dropoffCoordinates, paymentMethod } = req.body;
+    const { rideId, boardingAddress, boardingCoordinates, dropoffAddress, dropoffCoordinates, paymentMethod, paymentIntentId } = req.body;
 
     if (!rideId || !boardingCoordinates || !dropoffCoordinates) {
         return res.status(400).json({
@@ -25,7 +73,8 @@ exports.bookRide = async (req, res) => {
         message: 'Ride not found'
       });
     }
-    if (ride.status !== 'available') {
+    if (ride.status !== 'available' && !paymentIntentId) { // If paying, we already checked, but seat might be taken while paying. 
+                                                         // Ideally we'd hold the seat, but for now we check again.
       return res.status(400).json({
         success: false,
         message: 'This ride is no longer available'
@@ -47,8 +96,6 @@ exports.bookRide = async (req, res) => {
     }
 
     // STEP 3 — GENDER CHECK
-    // ─────────────────────────────────────────────────
-    // RULE 1: Female driver ride → only female passengers
     if (ride.driverGender === 'female' && req.user.gender === 'male') {
       return res.status(403).json({
         success: false,
@@ -56,15 +103,6 @@ exports.bookRide = async (req, res) => {
       });
     }
 
-    // RULE 2: Male driver chose males only → only male passengers
-    if (ride.genderPreference === 'male-only' && req.user.gender === 'female') {
-      return res.status(403).json({
-        success: false,
-        message: 'This ride is for male passengers only'
-      });
-    }
-
-    // STEP 4 — Check not already booked
     const alreadyBooked = ride.bookings.some(
       b => b.passenger.toString() === req.user._id.toString() && b.status === 'confirmed'
     );
@@ -75,41 +113,113 @@ exports.bookRide = async (req, res) => {
       });
     }
 
-    // STEP 5 — Calculate partial fare + Justice Benefits check
-    let fareCharged = calculatePartialFare(
+    // STEP 5 — Economic Calculations
+    let initialFare = calculatePartialFare(
       ride.fromCoordinates.coordinates,
       ride.toCoordinates.coordinates,
       dropoffCoordinates,
       ride.price
     );
 
-    // JUSTICE PROTOCOL: Check for priority badge subsidy
-    let systemSubsidy = 0;
-    let totalDriverEarnings = fareCharged;
-    
+    const originalFare = initialFare;
     const isPriorityUser = req.user.priorityBadgeExpires && new Date(req.user.priorityBadgeExpires) > new Date();
-    if (isPriorityUser) {
-      const originalFare = fareCharged;
-      fareCharged = Math.floor(originalFare * 0.9);
-      systemSubsidy = originalFare - fareCharged;
-      totalDriverEarnings = originalFare;
-      console.log(`[JusticeSystem] Priority Booking: Passenger pays ₹${fareCharged}, Platform covers ₹${systemSubsidy}. Raider receives full ₹${totalDriverEarnings}`);
+    
+    let fareCharged = isPriorityUser ? Math.floor(originalFare * 0.9) : originalFare;
+    let systemSubsidy = originalFare - fareCharged;
+
+    const commissionAmount = Math.floor(originalFare * 0.20);
+    const finalRiderEarnings = originalFare - commissionAmount;
+
+    // STEP 6 — Financial Operations
+    const admin = await User.findOne({ role: 'admin' });
+    const passenger = await User.findById(req.user._id);
+
+    if (paymentMethod === 'wallet') {
+        if (passenger.walletBalance < fareCharged) {
+          return res.status(400).json({ success: false, message: "Insufficient wallet balance" });
+        }
+
+        const updatedPassenger = await User.findOneAndUpdate(
+          { _id: req.user._id, walletBalance: { $gte: fareCharged } },
+          { $inc: { walletBalance: -fareCharged } },
+          { new: true }
+        );
+
+        if (!updatedPassenger) {
+          return res.status(400).json({ success: false, message: 'Transaction error. Please try again.' });
+        }
+      
+        if (admin) {
+          await User.findByIdAndUpdate(admin._id, { $inc: { walletBalance: fareCharged } });
+          await Transaction.create({
+            userId: admin._id,
+            type: 'ESCROW_HOLD',
+            amount: fareCharged,
+            rideId: ride._id,
+            description: `Escrow Hold (Wallet) - Passenger ${passenger.name} for Ride to ${ride.to}`
+          });
+        }
+
+        await Transaction.create({
+          userId: passenger._id,
+          type: 'RIDE_PAYMENT',
+          amount: -fareCharged,
+          rideId: ride._id,
+          description: `Ride booking to ${ride.to} held in escrow`
+        });
+    } else if (paymentMethod === 'online') {
+        // VERIFY STRIPE PAYMENT
+        if (!paymentIntentId) {
+            return res.status(400).json({ success: false, message: 'Payment confirmation required' });
+        }
+        
+        try {
+            const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+            if (pi.status !== 'succeeded') {
+                return res.status(400).json({ success: false, message: 'Stripe payment has not succeeded' });
+            }
+            
+            // Log for Admin Wallet (Escrow)
+            if (admin) {
+                admin.walletBalance += fareCharged;
+                await admin.save();
+                
+                await Transaction.create({
+                    userId: admin._id,
+                    type: 'ESCROW_HOLD',
+                    amount: fareCharged,
+                    rideId: ride._id,
+                    description: `Escrow Hold (Stripe) - Passenger ${passenger.name} for Ride to ${ride.to}`,
+                    metadata: { paymentIntentId }
+                });
+            }
+            console.log(`[Escrow] 💳 Verified Stripe Payment ₹${fareCharged} from Passenger ${passenger.name}`);
+        } catch (err) {
+            return res.status(400).json({ success: false, message: 'Invalid payment verification' });
+        }
+    } else {
+      console.log(`[Escrow] 💵 Ride booked via Cash. Commission debt will be settled at completion.`);
     }
 
-    // STEP 6 — ATOMIC seat decrement + booking creation
+    // Handle Priority Subsidy Transaction Record (Audit Trail only, no balance movement here)
+    if (isPriorityUser && admin) {
+      await Transaction.create({
+        userId: admin._id,
+        type: 'SUBSIDY',
+        amount: -systemSubsidy,
+        rideId,
+        description: `Justice Subsidy (Pending) - Ride ${rideId}`
+      });
+    }
+
+    const driverEarnings = Math.floor(originalFare * 0.8);
+
+    // STEP 7 — ATOMIC seat decrement + booking creation
     const updatedRide = await Ride.findOneAndUpdate(
       {
         _id: rideId,
         seatsAvailable: { $gte: 1 },
-        status: 'available',
-        'bookings': {
-          $not: {
-            $elemMatch: {
-              passenger: req.user._id,
-              status: 'confirmed'
-            }
-          }
-        }
+        status: 'available'
       },
       {
         $inc: { seatsAvailable: -1 },
@@ -117,17 +227,11 @@ exports.bookRide = async (req, res) => {
           bookings: {
             passenger: req.user._id,
             status: 'confirmed',
-            boardingPoint: {
-              address:     ride.from,
-              coordinates: ride.fromCoordinates.coordinates
-            },
-            dropoffPoint: {
-              address: dropoffAddress || ride.to,
-              coordinates: dropoffCoordinates
-            },
+            boardingPoint: { address: ride.from, coordinates: ride.fromCoordinates.coordinates },
+            dropoffPoint: { address: dropoffAddress || ride.to, coordinates: dropoffCoordinates },
             fareCharged,
             systemSubsidy,
-            totalDriverEarnings,
+            totalDriverEarnings: driverEarnings, 
             paymentMethod: paymentMethod || 'cash',
             bookedAt: new Date()
           }
@@ -137,20 +241,15 @@ exports.bookRide = async (req, res) => {
     );
 
     if (!updatedRide) {
-      return res.status(400).json({
-        success: false,
-        message: 'No seats available or ride is not active'
-      });
+      return res.status(400).json({ success: false, message: 'No seats available' });
     }
 
-    // STEP 7 — If seats now 0, mark ride as full
+    // STEP 8 — If seats now 0, mark ride as full
     if (updatedRide.seatsAvailable === 0) {
-      await Ride.findByIdAndUpdate(rideId, {
-        status: 'full'
-      });
+      await Ride.findByIdAndUpdate(rideId, { status: 'full' });
     }
 
-    // STEP 8 — Create Notification for Driver
+    // STEP 9 — Create Notification for Driver
     await Notification.create({
       user: ride.driver,
       type: 'NEW_BOOKING',
@@ -284,7 +383,36 @@ exports.cancelBooking = async (req, res) => {
       });
     }
 
-    // STEP 6 — Notify Driver
+    // STEP 6 — Escrow Refund Logic
+    const userBooking = ride.bookings.find(b => b.passenger.toString() === req.user._id.toString() && b.status === 'confirmed');
+    if (userBooking && (userBooking.paymentMethod === 'online' || userBooking.paymentMethod === 'wallet')) {
+       const admin = await User.findOne({ role: 'admin' });
+       
+       req.user.walletBalance += userBooking.fareCharged;
+       if (admin) {
+         admin.walletBalance -= userBooking.fareCharged;
+         await Transaction.create({
+           userId: admin._id,
+           type: 'ESCROW_RELEASE',
+           amount: -userBooking.fareCharged,
+           rideId: ride._id,
+           description: `Escrow Refund: Cancellation by ${req.user.name}`
+         });
+         await admin.save();
+       }
+       await req.user.save();
+       
+       await Transaction.create({
+         userId: req.user._id,
+         type: 'REFUND',
+         amount: userBooking.fareCharged,
+         rideId: ride._id,
+         description: `Refund - Cancelled ride to ${ride.to}`
+       });
+       console.log(`[Escrow] 🔄 Refunded ₹${userBooking.fareCharged} to Passenger ${req.user.name}`);
+    }
+
+    // STEP 7 — Notify Driver
     await Notification.create({
       user: ride.driver,
       type: 'BOOKING_CANCELLED',

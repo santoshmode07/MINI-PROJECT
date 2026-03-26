@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, LogOut, User, Bell, Car, Users, Clock } from 'lucide-react';
+import { LayoutDashboard, LogOut, User, Bell, Car, Users, Clock, Star, CreditCard } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 
@@ -15,7 +15,9 @@ const Navbar = () => {
     { name: 'Offer Ride', path: '/offer-ride' },
     { name: 'My Rides', path: '/my-rides', badge: driverStats?.newBookingsCount > 0 },
     { name: 'My Bookings', path: '/bookings' },
-    { name: 'Profile', path: '/profile' }
+    { name: 'Wallet', path: '/wallet-history' },
+    { name: 'Profile', path: '/profile' },
+    ...(user?.role === 'admin' ? [{ name: 'Admin', path: '/admin' }] : [])
   ];
 
   const isActive = (path) => location.pathname === path;
@@ -91,16 +93,22 @@ const Navbar = () => {
                          notifications.map(n => (
                             <Link 
                               key={n._id}
-                              to={n.type === 'RIDE_CANCELLED' ? '/bookings' : `/my-rides/${n.rideId}/passengers`}
+                              to={['RIDE_CANCELLED', 'FEEDBACK_REQUEST'].includes(n.type) ? '/bookings' : `/my-rides/${n.rideId}/passengers`}
                               onClick={() => setShowNotifications(false)}
                               className={`px-6 py-4 flex gap-4 hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0 ${!n.isRead ? 'bg-indigo-50/30' : ''}`}
                             >
                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                                  n.type === 'NEW_BOOKING' ? 'bg-emerald-100 text-emerald-600' : 
                                  n.type === 'BOOKING_CANCELLED' ? 'bg-amber-100 text-amber-600' : 
-                                 'bg-rose-100 text-rose-600'
+                                 n.type === 'COMMISSION_DEDUCTED' ? 'bg-rose-100 text-rose-600' :
+                                 n.type === 'FEEDBACK_REQUEST' ? 'bg-indigo-100 text-indigo-600' :
+                                 'bg-slate-100 text-slate-500'
                                }`}>
-                                  {n.type === 'NEW_BOOKING' ? <Users size={18} /> : n.type === 'BOOKING_CANCELLED' ? <Clock size={18} /> : <Car size={18} />}
+                                  {n.type === 'NEW_BOOKING' ? <Users size={18} /> : 
+                                   n.type === 'BOOKING_CANCELLED' ? <Clock size={18} /> : 
+                                   n.type === 'COMMISSION_DEDUCTED' ? <CreditCard size={18} /> :
+                                   n.type === 'FEEDBACK_REQUEST' ? <Star size={18} /> : 
+                                   <Car size={18} />}
                                </div>
                                <div>
                                   <p className="text-xs font-black text-slate-800 mb-0.5">{n.title}</p>

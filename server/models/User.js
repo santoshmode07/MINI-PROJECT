@@ -102,7 +102,29 @@ const userSchema = new mongoose.Schema({
     lastStrikeAt: {
         type: Date,
         default: null
-    }
+    },
+    walletBalance: {
+        type: Number,
+        default: 0
+    },
+    role: {
+        type: String,
+        enum: ['user', 'admin'],
+        default: 'user'
+    },
+    walletTransactions: [{
+        type: {
+            type: String,
+            enum: ['credit', 'debit', 'Money Added', 'Ride Payment', 'Commission', 'Refund']
+        },
+        amount: Number,
+        description: String,
+        paymentIntentId: String,
+        createdAt: {
+            type: Date,
+            default: Date.now
+        }
+    }]
 }, {
     timestamps: true
 });

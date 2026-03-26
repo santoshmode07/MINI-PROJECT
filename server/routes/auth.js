@@ -4,7 +4,9 @@ const {
     registerUser, 
     authUser, 
     logoutUser, 
-    getUserProfile 
+    getUserProfile,
+    topUpWallet,
+    getMyTransactions
 } = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -15,5 +17,7 @@ router.post('/register', registerUser);
 router.post('/login', authUser);
 router.post('/logout', logoutUser);
 router.get('/me', protect, getUserProfile);
+router.post('/wallet/topup', protect, topUpWallet);
+router.get('/wallet/transactions', protect, getMyTransactions);
 
 module.exports = router;

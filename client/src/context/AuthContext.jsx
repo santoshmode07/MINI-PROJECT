@@ -91,8 +91,21 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const refreshUser = async () => {
+    try {
+      const res = await api.get('/auth/me');
+      if (res.data.success) {
+        setUser(res.data.data);
+        localStorage.setItem('user', JSON.stringify(res.data.data));
+        return res.data.data;
+      }
+    } catch (err) {
+      console.error('Failed to refresh user profile', err);
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -13,9 +13,12 @@ import RideResults from './pages/RideResults';
 import MyBookings from './pages/MyBookings';
 import MyRides from './pages/MyRides';
 import RidePassengers from './pages/RidePassengers';
+import BoardingScreen from './pages/BoardingScreen';
 import Profile from './pages/Profile';
 import PriorityBenefits from './pages/PriorityBenefits';
+import TransactionHistory from './pages/TransactionHistory';
 import Home from './pages/Home';
+import AdminDashboard from './pages/AdminDashboard';
 import { useAuth } from './context/AuthContext';
 
 const App = () => {
@@ -38,8 +41,11 @@ const App = () => {
             <Route path="/bookings" element={<MyBookings />} />
             <Route path="/my-rides" element={<MyRides />} />
             <Route path="/my-rides/:rideId/passengers" element={<RidePassengers />} />
+            <Route path="/my-rides/:rideId/boarding" element={<BoardingScreen />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/priority-benefits" element={<PriorityBenefits />} />
+            <Route path="/wallet-history" element={<TransactionHistory />} />
+            <Route path="/admin" element={<AdminDashboard />} />
         </Route>
 
         {/* Landing Page */}

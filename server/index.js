@@ -1,5 +1,6 @@
 const express = require('express');
 const dotenv = require('dotenv');
+dotenv.config();
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const connectDB = require('./config/db');
@@ -8,10 +9,10 @@ const rideRoutes = require('./routes/rideRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
 const bookingRoutes = require('./routes/bookings');
 const notificationRoutes = require('./routes/notificationRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+const paymentRoutes = require('./routes/payments');
+const otpRoutes = require('./routes/otp');
 const { startCronJobs } = require('./controllers/rideController');
-
-// Load environment variables
-dotenv.config();
 
 // Connect to database
 connectDB();
@@ -24,6 +25,15 @@ const app = express();
 /**
  * Middleware
  */
+const paymentController = require('./controllers/paymentController');
+
+// Webhook for Stripe - MUST be before express.json()
+app.post(
+  '/api/payments/webhook',
+  express.raw({ type: 'application/json' }),
+  paymentController.handleWebhook
+);
+
 // Body parser
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -47,6 +57,9 @@ app.use('/api/rides', rideRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/otp', otpRoutes);
 
 // Simple health check endpoint
 app.get('/health', (req, res) => {
