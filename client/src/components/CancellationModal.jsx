@@ -38,11 +38,11 @@ const CancellationModal = ({ isOpen, onClose, onConfirm, passengerCount, rideDat
      if (passengerCount === 0) return "No penalty will be applied as there are no confirmed bookings.";
      
      if (diffMinutes > 120) {
-        return "SCENARIO 1: No warning or strike applied (Cancelled > 2 hours before). A small trust score impact will occur.";
+        return "No warning or strike applied (Cancelled > 2 hours before). A small trust score impact will occur.";
      } else if (diffMinutes >= 30) {
-        return "❗ SCENARIO 2: One WARNING will be added to your profile (Cancelled 30m-2h before). After 3 warnings, your account will be suspended for 24 hours.";
+        return "❗One WARNING will be added to your profile (Cancelled 30m-2h before). After 3 warnings, your account will be suspended for 24 hours.";
      } else {
-        return "🚨 SCENARIO 3: One STRIKE will be added to your profile (Cancelled < 30m before). You will be restricted from creating new rides for 24 hours.";
+        return "🚨 One STRIKE will be added to your profile (Cancelled < 30m before). You will be restricted from creating new rides for 7 DAYS.";
      }
   };
 

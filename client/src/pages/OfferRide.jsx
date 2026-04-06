@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -33,9 +33,48 @@ const OfferRide = () => {
     price: '',
     genderPreference: user?.gender === 'female' ? 'female-only' : 'any',
     waitingTime: 10,
-    agreedToPolicy: false
+    agreedToPolicy: false,
+    vehicleType: 'Car' // Default
   });
 
+  const [prediction, setPrediction] = useState(null);
+  const [isPredicting, setIsPredicting] = useState(false);
+
+  const handleAiPredict = async () => {
+    if (!formData.from || !formData.to) {
+      toast.info('Please enter pickup and destination first');
+      return;
+    }
+
+    setIsPredicting(true);
+    setPrediction(null);
+    try {
+      const res = await api.post('/rides/predict-price', { 
+        from: formData.from, 
+        to: formData.to,
+        fromCoords: formData.fromCoordinates,
+        toCoords: formData.toCoordinates,
+        vehicleType: formData.vehicleType
+      });
+      if (res.data.success) {
+        setPrediction(res.data.prediction);
+      }
+    } catch (err) {
+      console.error('Prediction failed:', err);
+      toast.error('AI Prediction failed. Please try again.');
+    } finally {
+      setIsPredicting(false);
+    }
+  };
+
+  // NEW: Get Price Assessment
+  const priceAssessment = useMemo(() => {
+    if (!prediction || !formData.price || isNaN(formData.price)) return null;
+    const price = Number(formData.price);
+    if (price > prediction.max) return { status: 'Overpriced', color: 'text-rose-400', bg: 'bg-rose-500/10' };
+    if (price < prediction.min) return { status: 'Underpriced', color: 'text-amber-400', bg: 'bg-amber-500/10' };
+    return { status: 'Good Price', color: 'text-emerald-400', bg: 'bg-emerald-500/10' };
+  }, [prediction, formData.price]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -217,11 +256,79 @@ const OfferRide = () => {
                         </div>
                      </div>
                      <div className="space-y-4">
-                        <label className={labelClass}>Price Per Co-Rider</label>
+                        <div className="flex items-center justify-between">
+                           <label className={labelClass + " mb-0"}>Price Per Co-Rider</label>
+                           <button 
+                             type="button"
+                             onClick={handleAiPredict}
+                             disabled={isPredicting || !formData.from || !formData.to}
+                             className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all text-[9px] font-black uppercase tracking-widest group ${isPredicting ? 'bg-indigo-50 text-indigo-400 border-indigo-100' : 'bg-indigo-50 hover:bg-indigo-600 text-indigo-600 hover:text-white border-indigo-100 shadow-sm shadow-indigo-100 hover:shadow-indigo-200'}`}
+                           >
+                              <Sparkles size={12} className={isPredicting ? 'animate-pulse' : 'group-hover:scale-110 transition-transform'} />
+                              {isPredicting ? 'Predicting...' : 'Smart Predict'}
+                           </button>
+                        </div>
                         <div className={inputContainerClass}>
                            <span className="absolute left-6 top-1/2 -translate-y-1/2 font-black text-indigo-600 text-lg pointer-events-none">₹</span>
                            <input name="price" type="number" placeholder="500" className="input-field !py-4 pl-14 font-black text-lg text-indigo-600" value={formData.price} onChange={handleChange} required />
                         </div>
+                        <AnimatePresence>
+                          {isPredicting ? (
+                            <motion.div 
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="flex items-center gap-2 px-4 py-2 bg-indigo-50/50 rounded-2xl border border-indigo-100"
+                            >
+                              <Loader2 className="h-3 w-3 animate-spin text-indigo-600" />
+                              <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">AI Calculating Fair Fare...</span>
+                            </motion.div>
+                          ) : prediction && (
+                            <motion.div 
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              className="px-4 py-3 bg-indigo-600 rounded-2xl border border-indigo-500 shadow-lg shadow-indigo-100"
+                            >
+                               <div className="flex items-center justify-between mb-1">
+                                  <div className="flex items-center gap-1.5">
+                                     <Sparkles size={10} className="text-indigo-200" />
+                                     <span className="text-[9px] font-black text-indigo-100 uppercase tracking-widest">Dynamic Price Engine</span>
+                                  </div>
+                                  <span className="text-[10px] font-black text-white italic">RECOMMENDED</span>
+                               </div>
+                               <div className="flex items-baseline gap-2">
+                                  <span className="text-lg font-black text-white italic tracking-tight">₹{prediction.min} - ₹{prediction.max}</span>
+                                  <span className="text-[9px] font-bold text-indigo-200 uppercase">Per Seat</span>
+                               </div>
+                                {prediction.reason && (
+                                   <p className="text-[8px] font-medium text-indigo-100 mt-1 opacity-80 uppercase leading-none tracking-tight">
+                                      {prediction.reason}
+                                   </p>
+                                )}
+                                
+                                {/* Price Assessment Section */}
+                                {priceAssessment && (
+                                   <div className={`mt-3 py-2 px-3 rounded-xl border border-white/20 flex items-center justify-between ${priceAssessment.bg}`}>
+                                      <div className="flex items-center gap-1.5 font-black text-[8px] text-white/50 uppercase tracking-tighter">
+                                         <Info size={10} />
+                                         Market Fit
+                                      </div>
+                                      <span className={`text-[10px] font-black uppercase italic ${priceAssessment.color}`}>
+                                         {priceAssessment.status}
+                                      </span>
+                                   </div>
+                                )}
+
+                                <button 
+                                  type="button"
+                                  onClick={() => setFormData(prev => ({ ...prev, price: Math.round((prediction.min + prediction.max) / 2) }))}
+                                  className="w-full mt-3 py-2.5 bg-white text-indigo-900 rounded-xl font-black text-[9px] uppercase tracking-widest shadow-xl shadow-indigo-900/20 hover:bg-slate-900 hover:text-white transition-all active:scale-95 flex items-center justify-center gap-2"
+                                >
+                                   <CheckCircle2 size={12} /> Use Recommended Price
+                                </button>
+                             </motion.div>
+                          )}
+                        </AnimatePresence>
                      </div>
                      <div className="space-y-4">
                         <label className={labelClass}>Waiting Duration (Mins)</label>
@@ -246,8 +353,21 @@ const OfferRide = () => {
                      Vehicle Specs
                   </h3>
                   <div className="space-y-8 relative z-10">
+                     {/* Vehicle Type Toggle */}
+                     <div className="flex gap-2 p-1 bg-white/5 rounded-2xl border border-white/10 mb-2">
+                        {['Car', 'Bike'].map((type) => (
+                           <button 
+                             key={type}
+                             type="button"
+                             onClick={() => setFormData({...formData, vehicleType: type, seatsAvailable: type === 'Bike' ? 1 : 4})}
+                             className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl transition-all font-black text-[10px] uppercase tracking-widest ${formData.vehicleType === type ? 'bg-white text-slate-900 shadow-xl' : 'text-white/40 hover:text-white/60'}`}
+                           >
+                             {type === 'Car' ? <Car size={14} /> : <Zap size={14} />} {type}
+                           </button>
+                        ))}
+                     </div>
                      <div className="space-y-3">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Car Model</label>
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Vehicle Model</label>
                         <input name="carModel" type="text" placeholder="Swift Dzire - White" className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 focus:outline-none focus:border-indigo-500 transition-all font-bold placeholder:text-white/20" value={formData.carModel} onChange={handleChange} required />
                      </div>
                      <div className="space-y-3">

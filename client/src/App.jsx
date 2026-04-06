@@ -6,6 +6,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import ProtectedRoute from './components/ProtectedRoute';
 import LoadingSpinner from './components/LoadingSpinner';
 import { useAuth } from './context/AuthContext';
+import SupportChat from './components/SupportChat';
 
 // Lazy load pages
 const Home = lazy(() => import('./pages/Home'));
@@ -61,6 +62,7 @@ const App = () => {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
+      <SupportChat />
     </>
   );
 };

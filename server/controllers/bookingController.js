@@ -275,6 +275,14 @@ exports.bookRide = async (req, res) => {
         boardingPoint: ride.from
     });
 
+    // Notify Admin Dashboard
+    socketManager.emitToAdmin('new_booking_received', {
+        rideId,
+        passengerName: req.user.name,
+        amountConsumed: fareCharged,
+        paymentMethod: paymentMethod || 'cash'
+    });
+
     // Also trigger global notification update for UI
     const unreadCount = await Notification.countDocuments({ user: ride.driver, isRead: false });
     socketManager.emitToUser(ride.driver, 'new_notification', {

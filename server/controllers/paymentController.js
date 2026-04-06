@@ -44,6 +44,67 @@ exports.createTopUpIntent = async (req, res) => {
   }
 };
 
+// @desc    Manually confirm a top-up if webhook is delayed (Frontend fallback)
+// @route   POST /api/payments/topup/confirm
+// @access  Private
+exports.confirmTopUp = async (req, res) => {
+  try {
+    const { paymentIntentId } = req.body;
+    if (!paymentIntentId) return res.status(400).json({ success: false, message: 'Payment ID required' });
+
+    // Retrieve the intent from Stripe to verify status
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    
+    if (paymentIntent.status !== 'succeeded') {
+      return res.status(400).json({ success: false, message: 'Payment has not succeeded yet' });
+    }
+
+    // Verify it's a topup and belongs to this user
+    if (paymentIntent.metadata.type !== 'wallet_topup' || paymentIntent.metadata.userId !== req.user._id.toString()) {
+       return res.status(403).json({ success: false, message: 'Security violation: Intent mismatch' });
+    }
+
+    // Check if already processed (Idempotency)
+    const existingTx = await Transaction.findOne({ 'metadata.paymentIntentId': paymentIntentId });
+    if (existingTx) {
+       return res.status(200).json({ success: true, message: 'Already processed', balance: req.user.walletBalance });
+    }
+
+    const amountRupees = paymentIntent.amount / 100;
+
+    // 1. Create Transaction
+    await Transaction.create({
+      userId: req.user._id,
+      type: 'TOPUP',
+      amount: amountRupees,
+      description: `Wallet top up via Stripe (Verified)`,
+      metadata: {
+        paymentIntentId: paymentIntent.id,
+        paymentMethod: paymentIntent.payment_method_types?.[0] || 'stripe'
+      }
+    });
+
+    // 2. Update Balance
+    req.user.walletBalance += amountRupees;
+    await req.user.save();
+
+    // 3. Notify
+    socketManager.emitToUser(req.user._id, 'wallet_updated', {
+      newBalance: req.user.walletBalance,
+      transaction: { type: 'credit', amount: amountRupees, description: 'Wallet top up via Stripe' }
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Wallet credited successfully',
+      balance: req.user.walletBalance
+    });
+
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Handle Stripe Webhook for payment confirmation
 // @route   POST /api/payments/webhook
 // @access  Public

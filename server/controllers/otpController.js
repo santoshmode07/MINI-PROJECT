@@ -221,6 +221,13 @@ exports.processMoneyRelease = async (booking, ride, admin) => {
             const txs = [
                 {
                     userId: ride.driver,
+                    type: 'RIDE_EARNING',
+                    amount: 0,
+                    rideId: ride._id,
+                    description: `Fare Collected (Cash) - ₹${originalFare}`
+                },
+                {
+                    userId: ride.driver,
                     type: 'COMMISSION',
                     amount: -netCommission,
                     rideId: ride._id,
