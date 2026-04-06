@@ -1372,3 +1372,33 @@ exports.reportNoShow = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// @desc    Predict ride price range (AI-driven via Groq)
+// @route   POST /api/rides/predict-price
+// @access  Private
+exports.getPredictedPrice = async (req, res) => {
+  try {
+     const { from, to, fromCoords, toCoords, vehicleType } = req.body;
+     if (!from || !to) {
+        return res.status(400).json({ success: false, message: 'Pickup and Destination are required.' });
+     }
+     
+     // 1. Calculate Distance (if coordinates exist)
+     let distanceKM = null;
+     if (fromCoords && toCoords && fromCoords.length === 2 && toCoords.length === 2 && fromCoords[0] !== 0) {
+        const { haversineDistance } = require('../utils/fareHelper');
+        distanceKM = Math.round(haversineDistance(fromCoords, toCoords));
+        console.log(`[AI-Pricing] Precise distance calculated: ${distanceKM} km for ${vehicleType}`);
+     }
+
+     const { predictPrice } = require('../utils/aiPricing');
+     const prediction = await predictPrice(from, to, distanceKM, vehicleType);
+     
+     res.status(200).json({ 
+       success: true, 
+       prediction
+     });
+  } catch (error) {
+     res.status(500).json({ success: false, message: error.message });
+  }
+};

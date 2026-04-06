@@ -6,7 +6,8 @@ const {
   getRideById, 
   getMyOffers, 
   cancelRide, 
-  getDriverStats 
+  getDriverStats,
+  getPredictedPrice
 } = require('../controllers/rideController');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -14,6 +15,7 @@ const { protect } = require('../middleware/authMiddleware');
 router.use(protect);
 
 router.post('/offer', offerRide);
+router.post('/predict-price', getPredictedPrice);
 router.get('/', getAllRides);
 router.get('/my-offers', getMyOffers);
 router.get('/driver-stats', getDriverStats);

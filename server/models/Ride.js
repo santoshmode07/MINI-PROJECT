@@ -64,11 +64,11 @@ const rideSchema = new mongoose.Schema({
   },
   carModel: {
     type: String,
-    required: [true, 'Car model is required']
+    required: [true, 'Vehicle Model is required']
   },
   carNumber: {
     type: String,
-    required: [true, 'Car plate number is required'],
+    required: [true, 'Vehicle Number is required'],
     uppercase: true
   },
   price: {

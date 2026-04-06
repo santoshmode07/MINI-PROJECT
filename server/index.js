@@ -16,6 +16,7 @@ const adminRoutes = require('./routes/adminRoutes');
 const paymentRoutes = require('./routes/payments');
 const otpRoutes = require('./routes/otp');
 const dropoffRoutes = require('./routes/dropoff');
+const ragRoutes = require('./routes/ragRoutes');
 const { startCronJobs } = require('./controllers/rideController');
 
 const socketMiddleware = require('./middleware/socketMiddleware');
@@ -87,6 +88,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/otp', otpRoutes);
 app.use('/api/dropoff', dropoffRoutes);
+app.use('/api/rag', ragRoutes);
 
 // Simple health check endpoint
 app.get('/health', (req, res) => {
